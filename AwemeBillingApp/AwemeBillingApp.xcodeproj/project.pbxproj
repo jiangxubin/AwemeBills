@@ -1,0 +1,598 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		000000000000000000000101 /* AwemeBillingApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000201 /* AwemeBillingApp.swift */; };
+		000000000000000000000102 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000202 /* ContentView.swift */; };
+		000000000000000000000103 /* ExpenseRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000203 /* ExpenseRecord.swift */; };
+		000000000000000000000104 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000204 /* SampleData.swift */; };
+		000000000000000000000105 /* SummaryPeriod.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000205 /* SummaryPeriod.swift */; };
+		000000000000000000000106 /* ArchiveSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000206 /* ArchiveSchedule.swift */; };
+		000000000000000000000107 /* BillingAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000207 /* BillingAnalytics.swift */; };
+		000000000000000000000108 /* ArchiveNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000208 /* ArchiveNotificationService.swift */; };
+		000000000000000000000109 /* PaymentTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000209 /* PaymentTextParser.swift */; };
+		000000000000000000000110 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000210 /* OverviewView.swift */; };
+		000000000000000000000111 /* DetailListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000211 /* DetailListView.swift */; };
+		000000000000000000000112 /* SceneAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000212 /* SceneAnalysisView.swift */; };
+		000000000000000000000113 /* ArchiveScheduleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000213 /* ArchiveScheduleView.swift */; };
+		000000000000000000000114 /* PaymentMonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000214 /* PaymentMonitorView.swift */; };
+		000000000000000000000115 /* ExpenseEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000215 /* ExpenseEditorView.swift */; };
+		000000000000000000000116 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000216 /* Assets.xcassets */; };
+		000000000000000000000117 /* RecordExpenseIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000218 /* RecordExpenseIntent.swift */; };
+		000000000000000000000118 /* DataController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000219 /* DataController.swift */; };
+		000000000000000000000119 /* ReceiptImageParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000220 /* ReceiptImageParser.swift */; };
+		000000000000000000000129 /* ScreenshotImportDeepLinkHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000222 /* ScreenshotImportDeepLinkHandler.swift */; };
+		000000000000000000000120 /* AwemeBillingShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 000000000000000000000002 /* AwemeBillingShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		000000000000000000000121 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000230 /* ShareViewController.swift */; };
+		000000000000000000000122 /* ExpenseRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000203 /* ExpenseRecord.swift */; };
+		000000000000000000000123 /* ArchiveSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000206 /* ArchiveSchedule.swift */; };
+		000000000000000000000124 /* SummaryPeriod.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000205 /* SummaryPeriod.swift */; };
+		000000000000000000000125 /* DataController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000219 /* DataController.swift */; };
+		000000000000000000000126 /* PaymentTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000209 /* PaymentTextParser.swift */; };
+		000000000000000000000127 /* ReceiptImageParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000220 /* ReceiptImageParser.swift */; };
+		000000000000000000000128 /* BillingAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000207 /* BillingAnalytics.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		000000000000000000000B01 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000901 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000000000602;
+			remoteInfo = AwemeBillingShareExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		000000000000000000000803 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				000000000000000000000120 /* AwemeBillingShareExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		000000000000000000000001 /* AwemeBillingApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AwemeBillingApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000002 /* AwemeBillingShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AwemeBillingShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000201 /* AwemeBillingApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AwemeBillingApp.swift; sourceTree = "<group>"; };
+		000000000000000000000202 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		000000000000000000000203 /* ExpenseRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseRecord.swift; sourceTree = "<group>"; };
+		000000000000000000000204 /* SampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleData.swift; sourceTree = "<group>"; };
+		000000000000000000000205 /* SummaryPeriod.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryPeriod.swift; sourceTree = "<group>"; };
+		000000000000000000000206 /* ArchiveSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveSchedule.swift; sourceTree = "<group>"; };
+		000000000000000000000207 /* BillingAnalytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillingAnalytics.swift; sourceTree = "<group>"; };
+		000000000000000000000208 /* ArchiveNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveNotificationService.swift; sourceTree = "<group>"; };
+		000000000000000000000209 /* PaymentTextParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentTextParser.swift; sourceTree = "<group>"; };
+		000000000000000000000210 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
+		000000000000000000000211 /* DetailListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailListView.swift; sourceTree = "<group>"; };
+		000000000000000000000212 /* SceneAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneAnalysisView.swift; sourceTree = "<group>"; };
+		000000000000000000000213 /* ArchiveScheduleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveScheduleView.swift; sourceTree = "<group>"; };
+		000000000000000000000214 /* PaymentMonitorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentMonitorView.swift; sourceTree = "<group>"; };
+		000000000000000000000215 /* ExpenseEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseEditorView.swift; sourceTree = "<group>"; };
+		000000000000000000000216 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		000000000000000000000217 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		000000000000000000000218 /* RecordExpenseIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordExpenseIntent.swift; sourceTree = "<group>"; };
+		000000000000000000000219 /* DataController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataController.swift; sourceTree = "<group>"; };
+		000000000000000000000220 /* ReceiptImageParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptImageParser.swift; sourceTree = "<group>"; };
+		000000000000000000000221 /* AwemeBillingApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AwemeBillingApp.entitlements; sourceTree = "<group>"; };
+		000000000000000000000222 /* ScreenshotImportDeepLinkHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotImportDeepLinkHandler.swift; sourceTree = "<group>"; };
+		000000000000000000000230 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		000000000000000000000231 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		000000000000000000000232 /* AwemeBillingShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AwemeBillingShareExtension.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		000000000000000000000301 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		000000000000000000000806 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		000000000000000000000401 = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000402 /* AwemeBillingApp */,
+				000000000000000000000404 /* AwemeBillingShareExtension */,
+				000000000000000000000403 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		000000000000000000000402 /* AwemeBillingApp */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000201 /* AwemeBillingApp.swift */,
+				000000000000000000000202 /* ContentView.swift */,
+				000000000000000000000501 /* Models */,
+				000000000000000000000502 /* Services */,
+				000000000000000000000503 /* Views */,
+				000000000000000000000216 /* Assets.xcassets */,
+				000000000000000000000217 /* Info.plist */,
+				000000000000000000000221 /* AwemeBillingApp.entitlements */,
+			);
+			path = AwemeBillingApp;
+			sourceTree = "<group>";
+		};
+		000000000000000000000403 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000001 /* AwemeBillingApp.app */,
+				000000000000000000000002 /* AwemeBillingShareExtension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		000000000000000000000501 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000203 /* ExpenseRecord.swift */,
+				000000000000000000000204 /* SampleData.swift */,
+				000000000000000000000205 /* SummaryPeriod.swift */,
+				000000000000000000000206 /* ArchiveSchedule.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		000000000000000000000502 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000207 /* BillingAnalytics.swift */,
+				000000000000000000000208 /* ArchiveNotificationService.swift */,
+				000000000000000000000209 /* PaymentTextParser.swift */,
+				000000000000000000000218 /* RecordExpenseIntent.swift */,
+				000000000000000000000219 /* DataController.swift */,
+				000000000000000000000220 /* ReceiptImageParser.swift */,
+				000000000000000000000222 /* ScreenshotImportDeepLinkHandler.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		000000000000000000000503 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000210 /* OverviewView.swift */,
+				000000000000000000000211 /* DetailListView.swift */,
+				000000000000000000000212 /* SceneAnalysisView.swift */,
+				000000000000000000000213 /* ArchiveScheduleView.swift */,
+				000000000000000000000214 /* PaymentMonitorView.swift */,
+				000000000000000000000215 /* ExpenseEditorView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		000000000000000000000404 /* AwemeBillingShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000230 /* ShareViewController.swift */,
+				000000000000000000000231 /* Info.plist */,
+				000000000000000000000232 /* AwemeBillingShareExtension.entitlements */,
+			);
+			path = AwemeBillingShareExtension;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		000000000000000000000601 /* AwemeBillingApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000000000701 /* Build configuration list for PBXNativeTarget "AwemeBillingApp" */;
+			buildPhases = (
+				000000000000000000000801 /* Sources */,
+				000000000000000000000301 /* Frameworks */,
+				000000000000000000000802 /* Resources */,
+				000000000000000000000803 /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				000000000000000000000C01 /* PBXTargetDependency */,
+			);
+			name = AwemeBillingApp;
+			productName = AwemeBillingApp;
+			productReference = 000000000000000000000001 /* AwemeBillingApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+		000000000000000000000602 /* AwemeBillingShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000000000703 /* Build configuration list for PBXNativeTarget "AwemeBillingShareExtension" */;
+			buildPhases = (
+				000000000000000000000804 /* Sources */,
+				000000000000000000000806 /* Frameworks */,
+				000000000000000000000805 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AwemeBillingShareExtension;
+			productName = AwemeBillingShareExtension;
+			productReference = 000000000000000000000002 /* AwemeBillingShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		000000000000000000000901 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 2650;
+				TargetAttributes = {
+					000000000000000000000601 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					000000000000000000000602 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = 000000000000000000000702 /* Build configuration list for PBXProject "AwemeBillingApp" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				"zh-Hans",
+				en,
+				Base,
+			);
+			mainGroup = 000000000000000000000401;
+			productRefGroup = 000000000000000000000403 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				000000000000000000000601 /* AwemeBillingApp */,
+				000000000000000000000602 /* AwemeBillingShareExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		000000000000000000000802 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				000000000000000000000116 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		000000000000000000000805 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		000000000000000000000801 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				000000000000000000000101 /* AwemeBillingApp.swift in Sources */,
+				000000000000000000000102 /* ContentView.swift in Sources */,
+				000000000000000000000103 /* ExpenseRecord.swift in Sources */,
+				000000000000000000000104 /* SampleData.swift in Sources */,
+				000000000000000000000105 /* SummaryPeriod.swift in Sources */,
+				000000000000000000000106 /* ArchiveSchedule.swift in Sources */,
+				000000000000000000000107 /* BillingAnalytics.swift in Sources */,
+				000000000000000000000108 /* ArchiveNotificationService.swift in Sources */,
+				000000000000000000000109 /* PaymentTextParser.swift in Sources */,
+				000000000000000000000110 /* OverviewView.swift in Sources */,
+				000000000000000000000111 /* DetailListView.swift in Sources */,
+				000000000000000000000112 /* SceneAnalysisView.swift in Sources */,
+				000000000000000000000113 /* ArchiveScheduleView.swift in Sources */,
+				000000000000000000000114 /* PaymentMonitorView.swift in Sources */,
+				000000000000000000000115 /* ExpenseEditorView.swift in Sources */,
+				000000000000000000000117 /* RecordExpenseIntent.swift in Sources */,
+				000000000000000000000118 /* DataController.swift in Sources */,
+				000000000000000000000119 /* ReceiptImageParser.swift in Sources */,
+				000000000000000000000129 /* ScreenshotImportDeepLinkHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		000000000000000000000804 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				000000000000000000000121 /* ShareViewController.swift in Sources */,
+				000000000000000000000122 /* ExpenseRecord.swift in Sources */,
+				000000000000000000000123 /* ArchiveSchedule.swift in Sources */,
+				000000000000000000000124 /* SummaryPeriod.swift in Sources */,
+				000000000000000000000125 /* DataController.swift in Sources */,
+				000000000000000000000126 /* PaymentTextParser.swift in Sources */,
+				000000000000000000000127 /* ReceiptImageParser.swift in Sources */,
+				000000000000000000000128 /* BillingAnalytics.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		000000000000000000000C01 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000000000602 /* AwemeBillingShareExtension */;
+			targetProxy = 000000000000000000000B01 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		000000000000000000000A01 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 2NT2X9DHNP;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		000000000000000000000A02 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 2NT2X9DHNP;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		000000000000000000000A03 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = AwemeBillingApp/AwemeBillingApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AwemeBillingApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+					OCR_SPACE_API_KEY = "";
+				PRODUCT_BUNDLE_IDENTIFIER = com.aweme.billing.personal;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		000000000000000000000A04 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = AwemeBillingApp/AwemeBillingApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AwemeBillingApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+					OCR_SPACE_API_KEY = "";
+				PRODUCT_BUNDLE_IDENTIFIER = com.aweme.billing.personal;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		000000000000000000000A05 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = AwemeBillingShareExtension/AwemeBillingShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2NT2X9DHNP;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AwemeBillingShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+					OCR_SPACE_API_KEY = "";
+				PRODUCT_BUNDLE_IDENTIFIER = com.aweme.billing.personal.ShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		000000000000000000000A06 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = AwemeBillingShareExtension/AwemeBillingShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2NT2X9DHNP;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AwemeBillingShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+					OCR_SPACE_API_KEY = "";
+				PRODUCT_BUNDLE_IDENTIFIER = com.aweme.billing.personal.ShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		000000000000000000000701 /* Build configuration list for PBXNativeTarget "AwemeBillingApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				000000000000000000000A03 /* Debug */,
+				000000000000000000000A04 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		000000000000000000000702 /* Build configuration list for PBXProject "AwemeBillingApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				000000000000000000000A01 /* Debug */,
+				000000000000000000000A02 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		000000000000000000000703 /* Build configuration list for PBXNativeTarget "AwemeBillingShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				000000000000000000000A05 /* Debug */,
+				000000000000000000000A06 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 000000000000000000000901 /* Project object */;
+}
