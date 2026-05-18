@@ -5,6 +5,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ArchiveSchedule.periodRaw) private var schedules: [ArchiveSchedule]
     @Query private var expenses: [ExpenseRecord]
+    @Query private var reports: [ArchiveReport]
 
     var body: some View {
         TabView {
@@ -35,7 +36,15 @@ struct ContentView: View {
         }
         .task {
             seedIfNeeded()
-            ensureDefaultSchedules()
+            let allSchedules = ensureDefaultSchedules()
+            ArchiveReportService.generateMissingReports(
+                schedules: allSchedules,
+                records: expenses,
+                existingReports: reports,
+                context: modelContext
+            )
+            try? modelContext.save()
+            await scheduleNotificationsIfPossible(allSchedules)
         }
     }
 
@@ -44,11 +53,21 @@ struct ContentView: View {
         SampleData.records.forEach { modelContext.insert($0) }
     }
 
-    private func ensureDefaultSchedules() {
+    private func ensureDefaultSchedules() -> [ArchiveSchedule] {
         let existing = Set(schedules.compactMap { SummaryPeriod(rawValue: $0.periodRaw) })
-        SummaryPeriod.allCases
+        let newSchedules = SummaryPeriod.allCases
             .filter { !existing.contains($0) }
             .map { ArchiveSchedule.defaultSchedule(for: $0) }
-            .forEach { modelContext.insert($0) }
+        newSchedules.forEach { modelContext.insert($0) }
+        return schedules + newSchedules
+    }
+
+    private func scheduleNotificationsIfPossible(_ allSchedules: [ArchiveSchedule]) async {
+        do {
+            _ = try await ArchiveNotificationService.scheduleAll(allSchedules, records: expenses)
+            try? modelContext.save()
+        } catch {
+            print("Failed to schedule archive notifications: \(error)")
+        }
     }
 }

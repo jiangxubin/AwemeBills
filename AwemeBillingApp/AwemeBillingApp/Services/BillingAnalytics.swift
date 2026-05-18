@@ -36,6 +36,37 @@ enum BillingAnalytics {
         return records.filter { $0.occurredAt >= start && $0.occurredAt <= now }
     }
 
+    static func records(_ records: [ExpenseRecord], completedPeriod period: SummaryPeriod, before date: Date) -> [ExpenseRecord] {
+        guard let interval = completedPeriodInterval(for: period, before: date) else { return [] }
+        return records.filter { $0.occurredAt >= interval.start && $0.occurredAt < interval.end }
+    }
+
+    static func completedPeriodInterval(for period: SummaryPeriod, before date: Date) -> DateInterval? {
+        let calendar = Calendar.current
+        let end: Date
+        let start: Date
+
+        switch period {
+        case .day:
+            end = calendar.startOfDay(for: date)
+            start = calendar.date(byAdding: .day, value: -1, to: end) ?? end
+        case .week:
+            end = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? calendar.startOfDay(for: date)
+            start = calendar.date(byAdding: .weekOfYear, value: -1, to: end) ?? end
+        case .month:
+            end = calendar.dateInterval(of: .month, for: date)?.start ?? calendar.startOfDay(for: date)
+            start = calendar.date(byAdding: .month, value: -1, to: end) ?? end
+        case .quarter:
+            end = quarterStart(containing: date)
+            start = calendar.date(byAdding: .month, value: -3, to: end) ?? end
+        case .year:
+            end = calendar.dateInterval(of: .year, for: date)?.start ?? calendar.startOfDay(for: date)
+            start = calendar.date(byAdding: .year, value: -1, to: end) ?? end
+        }
+
+        return DateInterval(start: start, end: end)
+    }
+
     static func categoryTotals(_ records: [ExpenseRecord]) -> [CategoryTotal] {
         Dictionary(grouping: records, by: \.categoryRaw)
             .map { CategoryTotal(name: $0.key, amount: total($0.value)) }

@@ -32,8 +32,32 @@ enum ScreenshotImportDeepLinkHandler {
                 context.insert(record)
             }
             try context.save()
+            await refreshSummaryNotifications(context: context)
         } catch {
             print("Failed to import latest screenshot: \(error)")
+        }
+    }
+
+    @MainActor
+    private static func refreshSummaryNotifications(context: ModelContext) async {
+        let scheduleDescriptor = FetchDescriptor<ArchiveSchedule>()
+        let recordDescriptor = FetchDescriptor<ExpenseRecord>()
+
+        do {
+            let schedules = try context.fetch(scheduleDescriptor)
+            let records = try context.fetch(recordDescriptor)
+            let reports = try context.fetch(FetchDescriptor<ArchiveReport>())
+            ArchiveReportService.generateMissingReports(
+                schedules: schedules,
+                records: records,
+                existingReports: reports,
+                context: context
+            )
+            if try await ArchiveNotificationService.scheduleAll(schedules, records: records, requestAuthorizationIfNeeded: false) {
+                try? context.save()
+            }
+        } catch {
+            print("Failed to refresh summary notifications: \(error)")
         }
     }
 

@@ -102,6 +102,7 @@ struct PaymentMonitorView: View {
             isArchived: true
         )
         modelContext.insert(record)
+        Task { await refreshSummaryNotifications() }
         parseMessage = "已保存：\(payment.channel.rawValue) · \(payment.merchant) · \(BillingAnalytics.currency(payment.amount))"
     }
 
@@ -132,9 +133,30 @@ struct PaymentMonitorView: View {
                 modelContext.insert(record)
             }
             let total = payments.reduce(Decimal.zero) { $0 + $1.amount }
+            await refreshSummaryNotifications()
             parseMessage = "已从截图保存 \(payments.count) 笔，共 \(BillingAnalytics.currency(total))"
         } catch {
             parseMessage = "截图解析失败：\(error.localizedDescription)"
+        }
+    }
+
+    @MainActor
+    private func refreshSummaryNotifications() async {
+        do {
+            let schedules = try modelContext.fetch(FetchDescriptor<ArchiveSchedule>())
+            let records = try modelContext.fetch(FetchDescriptor<ExpenseRecord>())
+            let reports = try modelContext.fetch(FetchDescriptor<ArchiveReport>())
+            ArchiveReportService.generateMissingReports(
+                schedules: schedules,
+                records: records,
+                existingReports: reports,
+                context: modelContext
+            )
+            if try await ArchiveNotificationService.scheduleAll(schedules, records: records, requestAuthorizationIfNeeded: false) {
+                try? modelContext.save()
+            }
+        } catch {
+            print("Failed to refresh summary notifications: \(error)")
         }
     }
 

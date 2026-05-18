@@ -53,9 +53,30 @@ struct RecordExpenseIntent: AppIntent {
 
         context.insert(record)
         try context.save()
+        await refreshSummaryNotifications(context: context)
 
         let amountText = BillingAnalytics.currency(record.amount)
         return .result(dialog: "已记录 \(record.merchant) \(amountText)。")
+    }
+
+    @MainActor
+    private func refreshSummaryNotifications(context: ModelContext) async {
+        do {
+            let schedules = try context.fetch(FetchDescriptor<ArchiveSchedule>())
+            let records = try context.fetch(FetchDescriptor<ExpenseRecord>())
+            let reports = try context.fetch(FetchDescriptor<ArchiveReport>())
+            ArchiveReportService.generateMissingReports(
+                schedules: schedules,
+                records: records,
+                existingReports: reports,
+                context: context
+            )
+            if try await ArchiveNotificationService.scheduleAll(schedules, records: records, requestAuthorizationIfNeeded: false) {
+                try? context.save()
+            }
+        } catch {
+            print("Failed to refresh summary notifications: \(error)")
+        }
     }
 }
 
@@ -123,8 +144,29 @@ struct ImportExpenseScreenshotIntent: AppIntent {
             context.insert(record)
         }
         try context.save()
+        await refreshSummaryNotifications(context: context)
 
         let total = payments.reduce(Decimal.zero) { $0 + $1.amount }
         return .result(dialog: "已归档 \(payments.count) 笔消费，共 \(BillingAnalytics.currency(total))。")
+    }
+
+    @MainActor
+    private func refreshSummaryNotifications(context: ModelContext) async {
+        do {
+            let schedules = try context.fetch(FetchDescriptor<ArchiveSchedule>())
+            let records = try context.fetch(FetchDescriptor<ExpenseRecord>())
+            let reports = try context.fetch(FetchDescriptor<ArchiveReport>())
+            ArchiveReportService.generateMissingReports(
+                schedules: schedules,
+                records: records,
+                existingReports: reports,
+                context: context
+            )
+            if try await ArchiveNotificationService.scheduleAll(schedules, records: records, requestAuthorizationIfNeeded: false) {
+                try? context.save()
+            }
+        } catch {
+            print("Failed to refresh summary notifications: \(error)")
+        }
     }
 }

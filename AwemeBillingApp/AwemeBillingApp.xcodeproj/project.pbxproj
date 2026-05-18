@@ -27,6 +27,8 @@
 		000000000000000000000118 /* DataController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000219 /* DataController.swift */; };
 		000000000000000000000119 /* ReceiptImageParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000220 /* ReceiptImageParser.swift */; };
 		000000000000000000000129 /* ScreenshotImportDeepLinkHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000222 /* ScreenshotImportDeepLinkHandler.swift */; };
+		000000000000000000000130 /* ArchiveReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000223 /* ArchiveReport.swift */; };
+		000000000000000000000131 /* ArchiveReportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000224 /* ArchiveReportService.swift */; };
 		000000000000000000000120 /* AwemeBillingShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 000000000000000000000002 /* AwemeBillingShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		000000000000000000000121 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000230 /* ShareViewController.swift */; };
 		000000000000000000000122 /* ExpenseRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000203 /* ExpenseRecord.swift */; };
@@ -36,6 +38,7 @@
 		000000000000000000000126 /* PaymentTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000209 /* PaymentTextParser.swift */; };
 		000000000000000000000127 /* ReceiptImageParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000220 /* ReceiptImageParser.swift */; };
 		000000000000000000000128 /* BillingAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000207 /* BillingAnalytics.swift */; };
+		000000000000000000000132 /* ArchiveReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000223 /* ArchiveReport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -87,6 +90,8 @@
 		000000000000000000000220 /* ReceiptImageParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptImageParser.swift; sourceTree = "<group>"; };
 		000000000000000000000221 /* AwemeBillingApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AwemeBillingApp.entitlements; sourceTree = "<group>"; };
 		000000000000000000000222 /* ScreenshotImportDeepLinkHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotImportDeepLinkHandler.swift; sourceTree = "<group>"; };
+		000000000000000000000223 /* ArchiveReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveReport.swift; sourceTree = "<group>"; };
+		000000000000000000000224 /* ArchiveReportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveReportService.swift; sourceTree = "<group>"; };
 		000000000000000000000230 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		000000000000000000000231 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		000000000000000000000232 /* AwemeBillingShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AwemeBillingShareExtension.entitlements; sourceTree = "<group>"; };
@@ -150,6 +155,7 @@
 				000000000000000000000204 /* SampleData.swift */,
 				000000000000000000000205 /* SummaryPeriod.swift */,
 				000000000000000000000206 /* ArchiveSchedule.swift */,
+				000000000000000000000223 /* ArchiveReport.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -159,6 +165,7 @@
 			children = (
 				000000000000000000000207 /* BillingAnalytics.swift */,
 				000000000000000000000208 /* ArchiveNotificationService.swift */,
+				000000000000000000000224 /* ArchiveReportService.swift */,
 				000000000000000000000209 /* PaymentTextParser.swift */,
 				000000000000000000000218 /* RecordExpenseIntent.swift */,
 				000000000000000000000219 /* DataController.swift */,
@@ -310,6 +317,8 @@
 				000000000000000000000118 /* DataController.swift in Sources */,
 				000000000000000000000119 /* ReceiptImageParser.swift in Sources */,
 				000000000000000000000129 /* ScreenshotImportDeepLinkHandler.swift in Sources */,
+				000000000000000000000130 /* ArchiveReport.swift in Sources */,
+				000000000000000000000131 /* ArchiveReportService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -325,6 +334,7 @@
 				000000000000000000000126 /* PaymentTextParser.swift in Sources */,
 				000000000000000000000127 /* ReceiptImageParser.swift in Sources */,
 				000000000000000000000128 /* BillingAnalytics.swift in Sources */,
+				000000000000000000000132 /* ArchiveReport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
