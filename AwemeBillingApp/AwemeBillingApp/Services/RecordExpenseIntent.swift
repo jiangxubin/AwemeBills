@@ -39,10 +39,23 @@ struct RecordExpenseIntent: AppIntent {
         let context = ModelContext(DataController.sharedModelContainer)
         let cleanMerchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanScene = scene.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let record = ExpenseRecord(
+        let payment = ParsedPayment(
             amount: Decimal(amount),
             merchant: cleanMerchant.isEmpty ? "未命名商户" : cleanMerchant,
+            channel: channel,
+            note: note,
+            occurredAt: .now,
+            category: category
+        )
+        let existingRecords = (try? context.fetch(FetchDescriptor<ExpenseRecord>())) ?? []
+
+        guard ExpenseRecordMaintenance.uniquePayments([payment], existing: existingRecords).first != nil else {
+            return .result(dialog: "这笔消费已经存在，未重复记录。")
+        }
+
+        let record = ExpenseRecord(
+            amount: payment.amount,
+            merchant: payment.merchant,
             category: category,
             scene: cleanScene.isEmpty ? "快捷指令" : cleanScene,
             channel: channel,
@@ -65,7 +78,7 @@ struct RecordExpenseIntent: AppIntent {
             let schedules = try context.fetch(FetchDescriptor<ArchiveSchedule>())
             let records = try context.fetch(FetchDescriptor<ExpenseRecord>())
             let reports = try context.fetch(FetchDescriptor<ArchiveReport>())
-            ArchiveReportService.generateMissingReports(
+            ArchiveReportService.rebuildReports(
                 schedules: schedules,
                 records: records,
                 existingReports: reports,
@@ -130,7 +143,14 @@ struct ImportExpenseScreenshotIntent: AppIntent {
         }
 
         let context = ModelContext(DataController.sharedModelContainer)
-        for payment in payments {
+        let existingRecords = (try? context.fetch(FetchDescriptor<ExpenseRecord>())) ?? []
+        let uniquePayments = ExpenseRecordMaintenance.uniquePayments(payments, existing: existingRecords)
+
+        guard !uniquePayments.isEmpty else {
+            return .result(dialog: "已识别 \(payments.count) 笔，但都已经存在，未重复归档。")
+        }
+
+        for payment in uniquePayments {
             let record = ExpenseRecord(
                 amount: payment.amount,
                 merchant: payment.merchant,
@@ -146,8 +166,12 @@ struct ImportExpenseScreenshotIntent: AppIntent {
         try context.save()
         await refreshSummaryNotifications(context: context)
 
-        let total = payments.reduce(Decimal.zero) { $0 + $1.amount }
-        return .result(dialog: "已归档 \(payments.count) 笔消费，共 \(BillingAnalytics.currency(total))。")
+        let total = uniquePayments.reduce(Decimal.zero) { $0 + $1.amount }
+        let skippedCount = payments.count - uniquePayments.count
+        let dialog = skippedCount > 0
+            ? "已归档 \(uniquePayments.count) 笔消费，跳过 \(skippedCount) 笔重复，共 \(BillingAnalytics.currency(total))。"
+            : "已归档 \(uniquePayments.count) 笔消费，共 \(BillingAnalytics.currency(total))。"
+        return .result(dialog: "\(dialog)")
     }
 
     @MainActor
@@ -156,7 +180,7 @@ struct ImportExpenseScreenshotIntent: AppIntent {
             let schedules = try context.fetch(FetchDescriptor<ArchiveSchedule>())
             let records = try context.fetch(FetchDescriptor<ExpenseRecord>())
             let reports = try context.fetch(FetchDescriptor<ArchiveReport>())
-            ArchiveReportService.generateMissingReports(
+            ArchiveReportService.rebuildReports(
                 schedules: schedules,
                 records: records,
                 existingReports: reports,

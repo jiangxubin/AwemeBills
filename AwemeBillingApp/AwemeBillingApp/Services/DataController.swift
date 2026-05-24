@@ -8,7 +8,11 @@ enum DataController {
         let schema = Schema([
             ExpenseRecord.self,
             ArchiveSchedule.self,
-            ArchiveReport.self
+            ArchiveReport.self,
+            ImportBatch.self,
+            ParsedPaymentCandidate.self,
+            PaymentRule.self,
+            BudgetPlan.self
         ])
 
         let configuration = ModelConfiguration(

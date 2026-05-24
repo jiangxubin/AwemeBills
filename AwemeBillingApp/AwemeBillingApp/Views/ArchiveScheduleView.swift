@@ -7,124 +7,107 @@ struct ArchiveScheduleView: View {
     @Query(sort: \ExpenseRecord.occurredAt, order: .reverse) private var records: [ExpenseRecord]
     @Query(sort: \ArchiveReport.generatedAt, order: .reverse) private var reports: [ArchiveReport]
     @State private var statusMessage = ""
-    @State private var showsFallbackSettings = false
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    if reports.isEmpty {
-                        ContentUnavailableView(
-                            "暂无历史归档",
-                            systemImage: "archivebox",
-                            description: Text("到达推送时间后，消费管家会生成对应周期的归档报告。")
-                        )
-                        .listRowInsets(EdgeInsets())
-                    } else {
-                        ForEach(reports) { report in
-                            ArchiveReportRow(report: report)
-                        }
-                    }
-                } header: {
-                    Text("历史归档")
-                }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    archiveSummaryCard
+                    reportSection
 
-                Section("归档状态") {
-                    LabeledContent("已归档", value: "\(records.filter(\.isArchived).count) 笔")
-                    LabeledContent("未归档", value: "\(records.filter { !$0.isArchived }.count) 笔")
-                    Button {
-                        records.forEach { $0.isArchived = true }
-                    } label: {
-                        Label("归档当前全部历史消费", systemImage: "archivebox.fill")
-                    }
-
-                    Button {
-                        generateReports()
-                    } label: {
-                        Label("补齐历史归档报告", systemImage: "doc.badge.clock")
-                    }
-                }
-
-                fallbackSettingsSection
-
-                if !statusMessage.isEmpty {
-                    Section {
+                    if !statusMessage.isEmpty {
                         Text(statusMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 2)
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
+                .padding(.bottom, 30)
+            }
+            .background(AppTheme.background)
+            .navigationTitle("归档")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private var archiveSummaryCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("历史归档")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text("\(visibleReports.count) 份报告")
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                        Text("只保留有消费明细的周期，报告会从当前明细重建。")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+
+                    Spacer()
+
+                    Image(systemName: "archivebox.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                        .frame(width: 48, height: 48)
+                        .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
                 }
+
+                Button {
+                    rebuildReports()
+                } label: {
+                    Label("刷新历史归档", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .navigationTitle("历史归档")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Task { await scheduleNotifications() }
-                    } label: {
-                        Image(systemName: "bell.badge")
+        }
+    }
+
+    private var reportSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "报告列表", subtitle: visibleReports.isEmpty ? nil : "\(visibleReports.count) 份")
+            AppCard {
+                if visibleReports.isEmpty {
+                    EmptyStateView(title: "暂无历史归档", systemImage: "archivebox")
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(visibleReports.indices, id: \.self) { index in
+                            ArchiveReportRow(report: visibleReports[index])
+                                .padding(.vertical, 12)
+                            if index < visibleReports.count - 1 {
+                                Divider()
+                            }
+                        }
                     }
-                    .accessibilityLabel("排程推送")
                 }
             }
         }
     }
 
-    private var fallbackSettingsSection: some View {
-        Section {
-            DisclosureGroup(isExpanded: $showsFallbackSettings) {
-                ForEach(SummaryPeriod.allCases) { period in
-                    if let schedule = schedules.first(where: { $0.period == period }) {
-                        ScheduleRow(schedule: schedule)
-                    }
-                }
-            } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("兜底推送设置")
-                        .font(.headline)
-                    Text(scheduleSummary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        } footer: {
-            Text("默认已经按日、周、月、季、年生成推送计划。平时不用改，只有想调整某个周期的推送时间时再展开。")
-        }
+    private var visibleReports: [ArchiveReport] {
+        Array(reports.filter { $0.recordCount > 0 }.prefix(20))
     }
 
-    private var scheduleSummary: String {
-        let enabledCount = schedules.filter(\.isEnabled).count
-        guard let daySchedule = schedules.first(where: { $0.period == .day }) else {
-            return "默认每日 09:00，其余周期同样按周期开始后推送"
-        }
-        return "\(enabledCount) 个兜底推送已启用，每日 \(String(format: "%02d:%02d", daySchedule.hour, daySchedule.minute))"
-    }
-
-    private func scheduleNotifications() async {
-        let granted = await ArchiveNotificationService.requestAuthorization()
-        guard granted else {
-            statusMessage = "通知权限未开启，无法推送消费总结。"
-            return
-        }
-
-        do {
-            for schedule in schedules {
-                try await ArchiveNotificationService.schedule(schedule, records: records)
-            }
-            try? modelContext.save()
-            statusMessage = "已更新 \(schedules.filter(\.isEnabled).count) 个总结推送。"
-        } catch {
-            statusMessage = "排程失败：\(error.localizedDescription)"
-        }
-    }
-
-    private func generateReports() {
-        let inserted = ArchiveReportService.generateMissingReports(
+    private func rebuildReports() {
+        let cleanup = ExpenseRecordMaintenance.cleanup(records: records, context: modelContext)
+        let currentRecords = (try? modelContext.fetch(FetchDescriptor<ExpenseRecord>())) ?? records
+        let currentReports = (try? modelContext.fetch(FetchDescriptor<ArchiveReport>())) ?? reports
+        let rebuilt = ArchiveReportService.rebuildReports(
             schedules: schedules,
-            records: records,
-            existingReports: reports,
+            records: currentRecords,
+            existingReports: currentReports,
             context: modelContext
         )
         try? modelContext.save()
-        statusMessage = inserted.isEmpty ? "没有需要补齐的历史归档报告。" : "已补齐 \(inserted.count) 份历史归档报告。"
+        if cleanup.didChange {
+            statusMessage = "已清理 \(cleanup.removedSeedRecords + cleanup.removedDuplicateRecords) 条脏/重复明细，并重建 \(rebuilt.count) 份报告。"
+        } else {
+            statusMessage = rebuilt.isEmpty ? "暂无可生成的历史归档报告。" : "已重建 \(rebuilt.count) 份历史归档报告。"
+        }
     }
 }
 
@@ -161,15 +144,20 @@ struct ScheduleRow: View {
             .padding(.top, 8)
         } label: {
             HStack(spacing: 12) {
-                Label(schedule.period.rawValue, systemImage: schedule.period.iconName)
-                    .font(.headline)
+                Image(systemName: schedule.period.iconName)
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 28)
+
+                Text(schedule.period.rawValue)
+                    .font(.subheadline.weight(.semibold))
+
                 Spacer()
+
                 Text(schedule.isEnabled ? String(format: "%02d:%02d", schedule.hour, schedule.minute) : "已停用")
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(schedule.isEnabled ? .primary : .secondary)
             }
         }
-        .padding(.vertical, 4)
     }
 }
 
@@ -177,30 +165,33 @@ struct ArchiveReportRow: View {
     let report: ArchiveReport
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label(report.period.rawValue, systemImage: report.period.iconName)
-                    .font(.headline)
-                Spacer()
-                Text(BillingAnalytics.currency(report.totalAmount))
-                    .font(.headline.monospacedDigit())
+        HStack(spacing: 12) {
+            Image(systemName: report.period.iconName)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 34, height: 34)
+                .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(report.period.rawValue) · \(reportDateText)")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text("\(report.recordCount) 笔 · \(report.topCategory)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
-            Text(reportPeriodText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Spacer()
 
-            Text(report.body)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            Text(BillingAnalytics.currency(report.totalAmount))
+                .font(.subheadline.weight(.bold).monospacedDigit())
         }
-        .padding(.vertical, 6)
     }
 
-    private var reportPeriodText: String {
+    private var reportDateText: String {
         let start = report.periodStart.formatted(.dateTime.year().month().day())
         let end = Calendar.current.date(byAdding: .second, value: -1, to: report.periodEnd) ?? report.periodEnd
         let endText = end.formatted(.dateTime.year().month().day())
-        return "\(start) - \(endText) · \(report.recordCount) 笔 · \(report.generatedAt.formatted(.dateTime.month().day().hour().minute()))生成"
+        return start == endText ? start : "\(start)-\(endText)"
     }
 }

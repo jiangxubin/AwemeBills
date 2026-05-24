@@ -16,6 +16,10 @@
 	<string>消费管家</string>
 	<key>OCRSpaceAPIKey</key>
 	<string>$(OCR_SPACE_API_KEY)</string>
+	<key>TencentOCRSecretId</key>
+	<string>$(TENCENT_OCR_SECRET_ID)</string>
+	<key>TencentOCRSecretKey</key>
+	<string>$(TENCENT_OCR_SECRET_KEY)</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>

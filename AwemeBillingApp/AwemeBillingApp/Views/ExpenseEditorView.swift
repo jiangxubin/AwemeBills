@@ -4,6 +4,7 @@ import SwiftUI
 struct ExpenseEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    private let editingRecord: ExpenseRecord?
 
     @State private var amount = ""
     @State private var merchant = ""
@@ -12,9 +13,21 @@ struct ExpenseEditorView: View {
     @State private var channel: PaymentChannel = .alipay
     @State private var note = ""
     @State private var occurredAt = Date()
+    @State private var saveMessage = ""
 
     private var parsedAmount: Decimal? {
         Decimal(string: amount.replacingOccurrences(of: ",", with: ""))
+    }
+
+    init(record: ExpenseRecord? = nil) {
+        self.editingRecord = record
+        _amount = State(initialValue: record.map { NSDecimalNumber(decimal: $0.amount).stringValue } ?? "")
+        _merchant = State(initialValue: record?.merchant ?? "")
+        _category = State(initialValue: record?.category ?? .dining)
+        _scene = State(initialValue: record?.scene ?? "")
+        _channel = State(initialValue: record?.channel ?? .alipay)
+        _note = State(initialValue: record?.note ?? "")
+        _occurredAt = State(initialValue: record?.occurredAt ?? .now)
     }
 
     var body: some View {
@@ -23,6 +36,7 @@ struct ExpenseEditorView: View {
                 Section("金额") {
                     TextField("0.00", text: $amount)
                         .keyboardType(.decimalPad)
+                        .font(.title2.weight(.bold))
                     TextField("商户", text: $merchant)
                 }
 
@@ -44,8 +58,18 @@ struct ExpenseEditorView: View {
                     DatePicker("发生时间", selection: $occurredAt)
                     TextField("备注", text: $note, axis: .vertical)
                 }
+
+                if !saveMessage.isEmpty {
+                    Section {
+                        Text(saveMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
-            .navigationTitle("新增消费")
+            .scrollContentBackground(.hidden)
+            .background(AppTheme.background)
+            .navigationTitle(editingRecord == nil ? "新增消费" : "编辑消费")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -63,9 +87,39 @@ struct ExpenseEditorView: View {
 
     private func save() {
         guard let parsedAmount else { return }
+        let trimmedMerchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        let payment = ParsedPayment(
+            amount: parsedAmount,
+            merchant: trimmedMerchant,
+            channel: channel,
+            note: note,
+            occurredAt: occurredAt,
+            category: category
+        )
+        let existingRecords = ((try? modelContext.fetch(FetchDescriptor<ExpenseRecord>())) ?? [])
+            .filter { $0 !== editingRecord }
+
+        guard ExpenseRecordMaintenance.uniquePayments([payment], existing: existingRecords).first != nil else {
+            saveMessage = "这笔消费已经存在，未重复保存。"
+            return
+        }
+
+        if let editingRecord {
+            editingRecord.amount = parsedAmount
+            editingRecord.merchant = trimmedMerchant
+            editingRecord.category = category
+            editingRecord.scene = scene.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? category.rawValue : scene
+            editingRecord.channel = channel
+            editingRecord.note = note
+            editingRecord.occurredAt = occurredAt
+            PaymentRuleEngine.learnRule(from: editingRecord, context: modelContext)
+            dismiss()
+            return
+        }
+
         let record = ExpenseRecord(
             amount: parsedAmount,
-            merchant: merchant.trimmingCharacters(in: .whitespacesAndNewlines),
+            merchant: trimmedMerchant,
             category: category,
             scene: scene.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? category.rawValue : scene,
             channel: channel,
@@ -73,6 +127,7 @@ struct ExpenseEditorView: View {
             occurredAt: occurredAt
         )
         modelContext.insert(record)
+        PaymentRuleEngine.learnRule(from: record, context: modelContext)
         dismiss()
     }
 }

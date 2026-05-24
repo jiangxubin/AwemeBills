@@ -1,82 +1,58 @@
-<<<<<<< HEAD
-# Xcode
-#
-# gitignore contributors: remember to update Global/Xcode.gitignore, Objective-C.gitignore & Swift.gitignore
+# macOS
+.DS_Store
 
-## User settings
+# Xcode user/local state
 xcuserdata/
+*.xcuserdata/
+*.xcuserstate
+*.moved-aside
+AwemeBillingApp/*.xcodeproj/project.xcworkspace/
+AwemeBillingApp/*.xcodeproj/xcuserdata/
 
-## Obj-C/Swift specific
-*.hmap
-
-## App packaging
+# Xcode build products and archives
+DerivedData*/
+Build*/
+*.app
+*.appex
 *.ipa
-*.dSYM.zip
+*.xcarchive
 *.dSYM
+*.dSYM.zip
+*.xcresult
+*.xccovarchive
+*.xccovreport
 
-## Playgrounds
-timeline.xctimeline
-playground.xcworkspace
-
-# Swift Package Manager
-#
-# Add this line if you want to avoid checking in source code from Swift Package Manager dependencies.
-# Packages/
-# Package.pins
-# Package.resolved
-# *.xcodeproj
-#
-# Xcode automatically generates this directory with a .xcworkspacedata file and xcuserdata
-# hence it is not needed unless you have added a package configuration file to your project
-# .swiftpm
-
+# Swift Package Manager and compiler caches
 .build/
+.swiftpm/
+.module-cache/
+ModuleCache.noindex/
 
-# CocoaPods
-#
-# We recommend against adding the Pods directory to your .gitignore. However
-# you should judge for yourself, the pros and cons are mentioned at:
-# https://guides.cocoapods.org/using/using-cocoapods.html#should-i-check-the-pods-directory-into-source-control
-#
-# Pods/
-#
-# Add this line if you want to avoid checking in source code from the Xcode workspace
-# *.xcworkspace
+# Local secrets
+LocalSecrets.xcconfig
+*.secret.xcconfig
 
-# Carthage
-#
-# Add this line if you want to avoid checking in source code from Carthage dependencies.
-# Carthage/Checkouts
+# Python/tool caches
+__pycache__/
+*.py[cod]
 
-Carthage/Build/
+# Local Codex/tooling state
+.codex/
 
-# fastlane
-#
-# It is recommended to not store the screenshots in the git repo.
-# Instead, use fastlane to re-generate the screenshots whenever they are needed.
-# For more information about the recommended setup visit:
-# https://docs.fastlane.tools/best-practices/source-control/#source-control
+# Local vendor SDK downloads/reference packages.
+# If a vendor SDK becomes a real build dependency, vendor only the exact
+# framework/resource bundle used by the Xcode project instead of the full demo/doc package.
+OCR_iOS_SDK_v*/
 
+# Local simulator/debug screenshots
+simulator-*.png
+*-launch.png
+ui-redesign-*.png
+awemebilling-openai-launch.png
+simulator-ocrspace-home.png
+
+# fastlane generated output
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
-=======
-.DS_Store
-
-# Xcode
-DerivedData*/
-Build/
-*.xcuserdata/
-*.xcuserstate
-*.moved-aside
-LocalSecrets.xcconfig
-
-# Swift/module caches
-.module-cache/
-.build/
-
-# Local simulator/debug screenshots
-awemebilling-openai-launch.png
-simulator-ocrspace-home.png
->>>>>>> 133f4ab (V0.1)

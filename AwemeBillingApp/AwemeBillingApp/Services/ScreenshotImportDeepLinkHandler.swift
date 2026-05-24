@@ -18,21 +18,14 @@ enum ScreenshotImportDeepLinkHandler {
             guard !payments.isEmpty else { return }
 
             let context = ModelContext(DataController.sharedModelContainer)
-            for payment in payments {
-                let record = ExpenseRecord(
-                    amount: payment.amount,
-                    merchant: payment.merchant,
-                    category: payment.category,
-                    scene: "快捷指令截图导入",
-                    channel: payment.channel,
-                    note: payment.note,
-                    occurredAt: payment.occurredAt ?? .now,
-                    isArchived: true
-                )
-                context.insert(record)
-            }
-            try context.save()
-            await refreshSummaryNotifications(context: context)
+            let rawText = payments.map(\.note).joined(separator: "\n---\n")
+            _ = ImportPipeline.createBatch(
+                source: .shortcutURL,
+                rawText: rawText,
+                payments: payments,
+                scene: "快捷指令截图导入",
+                context: context
+            )
         } catch {
             print("Failed to import latest screenshot: \(error)")
         }
@@ -47,7 +40,7 @@ enum ScreenshotImportDeepLinkHandler {
             let schedules = try context.fetch(scheduleDescriptor)
             let records = try context.fetch(recordDescriptor)
             let reports = try context.fetch(FetchDescriptor<ArchiveReport>())
-            ArchiveReportService.generateMissingReports(
+            ArchiveReportService.rebuildReports(
                 schedules: schedules,
                 records: records,
                 existingReports: reports,

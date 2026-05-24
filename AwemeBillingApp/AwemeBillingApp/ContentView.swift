@@ -6,51 +6,55 @@ struct ContentView: View {
     @Query(sort: \ArchiveSchedule.periodRaw) private var schedules: [ArchiveSchedule]
     @Query private var expenses: [ExpenseRecord]
     @Query private var reports: [ArchiveReport]
+    @AppStorage("appearanceMode") private var appearanceMode = "system"
 
     var body: some View {
         TabView {
             OverviewView()
                 .tabItem {
-                    Label("总览", systemImage: "chart.pie.fill")
+                    Label("总览", systemImage: "chart.pie")
                 }
 
             DetailListView()
                 .tabItem {
-                    Label("明细", systemImage: "list.bullet.rectangle")
-                }
-
-            SceneAnalysisView()
-                .tabItem {
-                    Label("场景", systemImage: "map.fill")
-                }
-
-            ArchiveScheduleView()
-                .tabItem {
-                    Label("归档", systemImage: "archivebox.fill")
+                    Label("明细", systemImage: "list.bullet.rectangle.portrait")
                 }
 
             PaymentMonitorView()
                 .tabItem {
-                    Label("接入", systemImage: "antenna.radiowaves.left.and.right")
+                    Label("接入", systemImage: "square.and.arrow.down")
+                }
+
+            ProfileSettingsView()
+                .tabItem {
+                    Label("我的", systemImage: "person.crop.circle")
                 }
         }
+        .tint(AppTheme.accent)
+        .preferredColorScheme(preferredColorScheme)
         .task {
-            seedIfNeeded()
             let allSchedules = ensureDefaultSchedules()
-            ArchiveReportService.generateMissingReports(
-                schedules: allSchedules,
-                records: expenses,
-                existingReports: reports,
-                context: modelContext
-            )
+            let cleanup = ExpenseRecordMaintenance.cleanup(records: expenses, context: modelContext)
+            let currentRecords = (try? modelContext.fetch(FetchDescriptor<ExpenseRecord>())) ?? expenses
+            let currentReports = (try? modelContext.fetch(FetchDescriptor<ArchiveReport>())) ?? reports
+            if cleanup.didChange || !currentReports.isEmpty {
+                ArchiveReportService.rebuildReports(
+                    schedules: allSchedules,
+                    records: currentRecords,
+                    existingReports: currentReports,
+                    context: modelContext
+                )
+            } else {
+                ArchiveReportService.generateMissingReports(
+                    schedules: allSchedules,
+                    records: currentRecords,
+                    existingReports: currentReports,
+                    context: modelContext
+                )
+            }
             try? modelContext.save()
-            await scheduleNotificationsIfPossible(allSchedules)
+            await scheduleNotificationsIfPossible(allSchedules, records: currentRecords)
         }
-    }
-
-    private func seedIfNeeded() {
-        guard expenses.isEmpty else { return }
-        SampleData.records.forEach { modelContext.insert($0) }
     }
 
     private func ensureDefaultSchedules() -> [ArchiveSchedule] {
@@ -62,12 +66,24 @@ struct ContentView: View {
         return schedules + newSchedules
     }
 
-    private func scheduleNotificationsIfPossible(_ allSchedules: [ArchiveSchedule]) async {
+    private func scheduleNotificationsIfPossible(_ allSchedules: [ArchiveSchedule], records: [ExpenseRecord]) async {
         do {
-            _ = try await ArchiveNotificationService.scheduleAll(allSchedules, records: expenses)
+            _ = try await ArchiveNotificationService.scheduleAll(
+                allSchedules,
+                records: records,
+                requestAuthorizationIfNeeded: false
+            )
             try? modelContext.save()
         } catch {
             print("Failed to schedule archive notifications: \(error)")
+        }
+    }
+
+    private var preferredColorScheme: ColorScheme? {
+        switch appearanceMode {
+        case "light": .light
+        case "dark": .dark
+        default: nil
         }
     }
 }
