@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UserNotifications
 
 struct ProfileSettingsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -8,6 +9,8 @@ struct ProfileSettingsView: View {
     @AppStorage("appearanceMode") private var appearanceMode = "system"
     @AppStorage("detailDefaultPeriod") private var detailDefaultPeriod = "month"
     @State private var statusMessage = ""
+    @State private var notificationStatusText = "检查中"
+    @State private var nextPushText = "尚未排程"
 
     var body: some View {
         NavigationStack {
@@ -42,6 +45,12 @@ struct ProfileSettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 4)
+
+                        SettingsInfoRow(
+                            title: "当前状态",
+                            systemImage: "bell",
+                            text: "\(notificationStatusText) · 下一次：\(nextPushText)"
+                        )
 
                         VStack(spacing: 0) {
                             ForEach(SummaryPeriod.allCases) { period in
@@ -104,6 +113,9 @@ struct ProfileSettingsView: View {
             .background(AppTheme.background)
             .navigationTitle("我的")
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                await refreshNotificationStatus()
+            }
         }
     }
 
@@ -133,9 +145,33 @@ struct ProfileSettingsView: View {
                 try await ArchiveNotificationService.schedule(schedule, records: records)
             }
             try? modelContext.save()
+            await refreshNotificationStatus()
             statusMessage = "已保存并更新 \(schedules.filter(\.isEnabled).count) 个消费总结推送。"
         } catch {
             statusMessage = "排程失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func refreshNotificationStatus() async {
+        let status = await ArchiveNotificationService.authorizationStatus()
+        notificationStatusText = notificationStatusDescription(for: status)
+        if let date = await ArchiveNotificationService.nextScheduledFireDate() {
+            nextPushText = date.formatted(.dateTime.month().day().hour().minute())
+        } else {
+            nextPushText = "尚未排程"
+        }
+    }
+
+    private func notificationStatusDescription(for status: UNAuthorizationStatus) -> String {
+        switch status {
+        case .authorized, .provisional, .ephemeral:
+            return "通知已开启"
+        case .denied:
+            return "通知权限已关闭"
+        case .notDetermined:
+            return "等待授权"
+        @unknown default:
+            return "状态未知"
         }
     }
 }

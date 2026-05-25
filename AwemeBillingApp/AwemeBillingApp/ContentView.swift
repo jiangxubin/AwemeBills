@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \ArchiveSchedule.periodRaw) private var schedules: [ArchiveSchedule]
     @Query private var expenses: [ExpenseRecord]
     @Query private var reports: [ArchiveReport]
@@ -33,27 +34,14 @@ struct ContentView: View {
         .tint(AppTheme.accent)
         .preferredColorScheme(preferredColorScheme)
         .task {
-            let allSchedules = ensureDefaultSchedules()
-            let cleanup = ExpenseRecordMaintenance.cleanup(records: expenses, context: modelContext)
-            let currentRecords = (try? modelContext.fetch(FetchDescriptor<ExpenseRecord>())) ?? expenses
-            let currentReports = (try? modelContext.fetch(FetchDescriptor<ArchiveReport>())) ?? reports
-            if cleanup.didChange || !currentReports.isEmpty {
-                ArchiveReportService.rebuildReports(
-                    schedules: allSchedules,
-                    records: currentRecords,
-                    existingReports: currentReports,
-                    context: modelContext
-                )
-            } else {
-                ArchiveReportService.generateMissingReports(
-                    schedules: allSchedules,
-                    records: currentRecords,
-                    existingReports: currentReports,
-                    context: modelContext
-                )
+            await refreshArchivesAndNotifications(requestAuthorizationIfNeeded: true)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                Task {
+                    await refreshArchivesAndNotifications(requestAuthorizationIfNeeded: false)
+                }
             }
-            try? modelContext.save()
-            await scheduleNotificationsIfPossible(allSchedules, records: currentRecords)
         }
     }
 
@@ -66,12 +54,44 @@ struct ContentView: View {
         return schedules + newSchedules
     }
 
-    private func scheduleNotificationsIfPossible(_ allSchedules: [ArchiveSchedule], records: [ExpenseRecord]) async {
+    private func refreshArchivesAndNotifications(requestAuthorizationIfNeeded: Bool) async {
+        let allSchedules = ensureDefaultSchedules()
+        let cleanup = ExpenseRecordMaintenance.cleanup(records: expenses, context: modelContext)
+        let currentRecords = (try? modelContext.fetch(FetchDescriptor<ExpenseRecord>())) ?? expenses
+        let currentReports = (try? modelContext.fetch(FetchDescriptor<ArchiveReport>())) ?? reports
+        if cleanup.didChange || !currentReports.isEmpty {
+            ArchiveReportService.rebuildReports(
+                schedules: allSchedules,
+                records: currentRecords,
+                existingReports: currentReports,
+                context: modelContext
+            )
+        } else {
+            ArchiveReportService.generateMissingReports(
+                schedules: allSchedules,
+                records: currentRecords,
+                existingReports: currentReports,
+                context: modelContext
+            )
+        }
+        try? modelContext.save()
+        await scheduleNotificationsIfPossible(
+            allSchedules,
+            records: currentRecords,
+            requestAuthorizationIfNeeded: requestAuthorizationIfNeeded
+        )
+    }
+
+    private func scheduleNotificationsIfPossible(
+        _ allSchedules: [ArchiveSchedule],
+        records: [ExpenseRecord],
+        requestAuthorizationIfNeeded: Bool
+    ) async {
         do {
             _ = try await ArchiveNotificationService.scheduleAll(
                 allSchedules,
                 records: records,
-                requestAuthorizationIfNeeded: false
+                requestAuthorizationIfNeeded: requestAuthorizationIfNeeded
             )
             try? modelContext.save()
         } catch {

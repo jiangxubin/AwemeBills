@@ -2,9 +2,16 @@ import Foundation
 import UserNotifications
 
 enum ArchiveNotificationService {
-    static func canScheduleWithoutPrompting() async -> Bool {
+    private static let identifierPrefix = "archive-summary-"
+
+    static func authorizationStatus() async -> UNAuthorizationStatus {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
-        return settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional || settings.authorizationStatus == .ephemeral
+        return settings.authorizationStatus
+    }
+
+    static func canScheduleWithoutPrompting() async -> Bool {
+        let status = await authorizationStatus()
+        return status == .authorized || status == .provisional || status == .ephemeral
     }
 
     static func requestAuthorization() async -> Bool {
@@ -49,8 +56,20 @@ enum ArchiveNotificationService {
         schedule.lastScheduledAt = .now
     }
 
+    static func pendingSummaryRequests() async -> [UNNotificationRequest] {
+        let requests = await UNUserNotificationCenter.current().pendingNotificationRequests()
+        return requests.filter { $0.identifier.hasPrefix(identifierPrefix) }
+    }
+
+    static func nextScheduledFireDate() async -> Date? {
+        let requests = await pendingSummaryRequests()
+        return requests
+            .compactMap { ($0.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate() }
+            .min()
+    }
+
     static func identifier(for period: SummaryPeriod) -> String {
-        "archive-summary-\(period.rawValue)"
+        "\(identifierPrefix)\(period.rawValue)"
     }
 
     private static func summaryBody(for period: SummaryPeriod, records: [ExpenseRecord], fireDate: Date) -> String {

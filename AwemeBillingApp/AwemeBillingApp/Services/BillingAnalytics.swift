@@ -89,25 +89,39 @@ enum BillingAnalytics {
 
     static func nextFireDate(for schedule: ArchiveSchedule, from date: Date = .now) -> Date {
         let calendar = Calendar.current
-        var base: Date
+        let currentBoundary: Date
+        let nextBoundary: Date
 
         switch schedule.period {
         case .day:
-            base = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date)) ?? date
+            currentBoundary = calendar.startOfDay(for: date)
+            nextBoundary = calendar.date(byAdding: .day, value: 1, to: currentBoundary) ?? date
         case .week:
-            let weekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
-            base = calendar.date(byAdding: .weekOfYear, value: 1, to: weekStart) ?? date
+            currentBoundary = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+            nextBoundary = calendar.date(byAdding: .weekOfYear, value: 1, to: currentBoundary) ?? date
         case .month:
-            let monthStart = calendar.dateInterval(of: .month, for: date)?.start ?? date
-            base = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? date
+            currentBoundary = calendar.dateInterval(of: .month, for: date)?.start ?? date
+            nextBoundary = calendar.date(byAdding: .month, value: 1, to: currentBoundary) ?? date
         case .quarter:
-            base = nextQuarterStart(after: date)
+            currentBoundary = quarterStart(containing: date)
+            nextBoundary = calendar.date(byAdding: .month, value: 3, to: currentBoundary) ?? date
         case .year:
-            let yearStart = calendar.dateInterval(of: .year, for: date)?.start ?? date
-            base = calendar.date(byAdding: .year, value: 1, to: yearStart) ?? date
+            currentBoundary = calendar.dateInterval(of: .year, for: date)?.start ?? date
+            nextBoundary = calendar.date(byAdding: .year, value: 1, to: currentBoundary) ?? date
         }
 
-        return calendar.date(bySettingHour: schedule.hour, minute: schedule.minute, second: 0, of: base) ?? base
+        let currentCandidate = calendar.date(
+            bySettingHour: schedule.hour,
+            minute: schedule.minute,
+            second: 0,
+            of: currentBoundary
+        ) ?? currentBoundary
+
+        if currentCandidate > date {
+            return currentCandidate
+        }
+
+        return calendar.date(bySettingHour: schedule.hour, minute: schedule.minute, second: 0, of: nextBoundary) ?? nextBoundary
     }
 
     static func currency(_ value: Decimal) -> String {
