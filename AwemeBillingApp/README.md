@@ -27,7 +27,7 @@ iOS 普通 App 不能实时读取其他 App 内部流水、后台数据或通知
 ## 构建
 
 ```sh
-xcodebuild -project AwemeBillingApp.xcodeproj -scheme AwemeBillingApp -destination 'platform=iOS Simulator,name=iPhone 17' build
+xcodebuild -project AwemeBillingApp/AwemeBillingApp.xcodeproj -scheme AwemeBillingApp -destination 'generic/platform=iOS Simulator' build-for-testing
 ```
 
 项目最低支持 iOS 17。
