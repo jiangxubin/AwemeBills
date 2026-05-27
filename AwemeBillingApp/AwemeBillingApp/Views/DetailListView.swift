@@ -4,12 +4,15 @@ import SwiftUI
 struct DetailListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ExpenseRecord.occurredAt, order: .reverse) private var records: [ExpenseRecord]
+    @AppStorage("detailDefaultPeriod") private var detailDefaultPeriod = "month"
     @State private var showingEditor = false
     @State private var editingRecord: ExpenseRecord?
     @State private var selectedCategory: ExpenseCategory?
     @State private var displayMode: DetailDisplayMode = .records
     @State private var selectedPeriod: ExpensePeriodFilter = .all
     @State private var selectedDimension: ExpenseAggregationDimension = .category
+    @State private var didApplyDefaultPeriod = false
+    @State private var pendingDeletion: ExpenseRecord?
 
     private var scopedRecords: [ExpenseRecord] {
         selectedPeriod.records(from: records)
@@ -71,6 +74,29 @@ struct DetailListView: View {
                     selectedCategory = nil
                 }
             }
+            .task {
+                applyDefaultPeriodIfNeeded()
+            }
+            .onChange(of: detailDefaultPeriod) { _, _ in
+                didApplyDefaultPeriod = false
+                applyDefaultPeriodIfNeeded()
+            }
+            .confirmationDialog(
+                "删除这笔消费？",
+                isPresented: deletionConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("删除", role: .destructive) {
+                    if let pendingDeletion {
+                        Task { await deleteRecord(pendingDeletion) }
+                    }
+                }
+                Button("取消", role: .cancel) {
+                    pendingDeletion = nil
+                }
+            } message: {
+                Text("删除后会同步刷新总览和报告。")
+            }
         }
     }
 
@@ -121,6 +147,12 @@ struct DetailListView: View {
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 8))
     }
 
+    private func applyDefaultPeriodIfNeeded() {
+        guard !didApplyDefaultPeriod else { return }
+        selectedPeriod = ExpensePeriodFilter(storageValue: detailDefaultPeriod)
+        didApplyDefaultPeriod = true
+    }
+
     private func chipRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -150,14 +182,14 @@ struct DetailListView: View {
                         .buttonStyle(.plain)
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
-                                    modelContext.delete(record)
+                                    pendingDeletion = record
                                 } label: {
                                     Label("删除", systemImage: "trash")
                                 }
                             }
                             .swipeActions(edge: .leading) {
                                 Button {
-                                    record.isArchived.toggle()
+                                    Task { await toggleArchived(record) }
                                 } label: {
                                     Label(record.isArchived ? "取消归档" : "归档", systemImage: "archivebox")
                                 }
@@ -200,6 +232,31 @@ struct DetailListView: View {
             }
         }
     }
+
+    private var deletionConfirmation: Binding<Bool> {
+        Binding {
+            pendingDeletion != nil
+        } set: { isPresented in
+            if !isPresented {
+                pendingDeletion = nil
+            }
+        }
+    }
+
+    @MainActor
+    private func deleteRecord(_ record: ExpenseRecord) async {
+        modelContext.delete(record)
+        try? modelContext.save()
+        await ExpenseMutationService.refreshReportsAndNotifications(context: modelContext)
+        pendingDeletion = nil
+    }
+
+    @MainActor
+    private func toggleArchived(_ record: ExpenseRecord) async {
+        record.isArchived.toggle()
+        try? modelContext.save()
+        await ExpenseMutationService.refreshReportsAndNotifications(context: modelContext)
+    }
 }
 
 private enum DetailDisplayMode: String, CaseIterable, Identifiable {
@@ -211,6 +268,7 @@ private enum DetailDisplayMode: String, CaseIterable, Identifiable {
 
 private enum ExpensePeriodFilter: String, CaseIterable, Identifiable {
     case all = "全部"
+    case day = "今天"
     case week = "本周"
     case month = "本月"
     case quarter = "本季"
@@ -223,6 +281,7 @@ private enum ExpensePeriodFilter: String, CaseIterable, Identifiable {
 
         let period: SummaryPeriod = switch self {
         case .all: .year
+        case .day: .day
         case .week: .week
         case .month: .month
         case .quarter: .quarter
@@ -302,8 +361,27 @@ private struct ExpenseAggregateRowData: Identifiable {
         switch period {
         case .all, .year:
             return date.formatted(.dateTime.year().month())
-        case .week, .month, .quarter:
+        case .day, .week, .month, .quarter:
             return date.formatted(.dateTime.month().day())
+        }
+    }
+}
+
+private extension ExpensePeriodFilter {
+    init(storageValue: String) {
+        switch storageValue {
+        case "day":
+            self = .day
+        case "week":
+            self = .week
+        case "month":
+            self = .month
+        case "quarter":
+            self = .quarter
+        case "year":
+            self = .year
+        default:
+            self = .all
         }
     }
 }

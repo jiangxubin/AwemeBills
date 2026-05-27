@@ -40,6 +40,12 @@ struct ProfileSettingsView: View {
                 }
 
                 Section("通用设置") {
+                    SettingsInfoRow(
+                        title: "截图识别",
+                        systemImage: "text.viewfinder",
+                        text: "选择账单截图后自动识别，识别结果会先进入复核，可修改后再入账。"
+                    )
+
                     DisclosureGroup {
                         Text("这些时间用于生成每日、每周、每月、每季度和每年的消费总结推送。系统会在 App 启动、导入和手动保存时刷新排程。")
                             .font(.caption)
@@ -176,7 +182,7 @@ struct ProfileSettingsView: View {
     }
 }
 
-private struct SettingsInfoRow: View {
+struct SettingsInfoRow: View {
     let title: String
     let systemImage: String
     let text: String

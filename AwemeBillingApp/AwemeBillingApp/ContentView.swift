@@ -8,28 +8,41 @@ struct ContentView: View {
     @Query private var expenses: [ExpenseRecord]
     @Query private var reports: [ArchiveReport]
     @AppStorage("appearanceMode") private var appearanceMode = "system"
+    @State private var selectedTab: AppTab = .overview
+    @State private var importMode: ImportMode = .screenshot
+    @State private var reviewImportRouteID = UUID()
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             OverviewView()
                 .tabItem {
                     Label("总览", systemImage: "chart.pie")
                 }
+                .tag(AppTab.overview)
 
             DetailListView()
                 .tabItem {
                     Label("明细", systemImage: "list.bullet.rectangle.portrait")
                 }
+                .tag(AppTab.details)
 
-            PaymentMonitorView()
+            PaymentMonitorView(importMode: $importMode, reviewRouteID: reviewImportRouteID)
                 .tabItem {
-                    Label("接入", systemImage: "square.and.arrow.down")
+                    Label("导入", systemImage: "square.and.arrow.down")
                 }
+                .tag(AppTab.importing)
+
+            ArchiveScheduleView()
+                .tabItem {
+                    Label("报告", systemImage: "doc.text.magnifyingglass")
+                }
+                .tag(AppTab.reports)
 
             ProfileSettingsView()
                 .tabItem {
                     Label("我的", systemImage: "person.crop.circle")
                 }
+                .tag(AppTab.profile)
         }
         .tint(AppTheme.accent)
         .preferredColorScheme(preferredColorScheme)
@@ -42,6 +55,9 @@ struct ContentView: View {
                     await refreshArchivesAndNotifications(requestAuthorizationIfNeeded: false)
                 }
             }
+        }
+        .onOpenURL { url in
+            Task { await handleURL(url) }
         }
     }
 
@@ -106,4 +122,29 @@ struct ContentView: View {
         default: nil
         }
     }
+
+    @MainActor
+    private func handleURL(_ url: URL) async {
+        guard url.scheme == "awemebilling" else { return }
+        selectedTab = .importing
+        importMode = .screenshot
+
+        if url.host == "review-import" {
+            reviewImportRouteID = UUID()
+            return
+        }
+
+        if ScreenshotImportDeepLinkHandler.canHandle(url) {
+            await ScreenshotImportDeepLinkHandler.handle(url)
+            reviewImportRouteID = UUID()
+        }
+    }
+}
+
+private enum AppTab: Hashable {
+    case overview
+    case details
+    case importing
+    case reports
+    case profile
 }

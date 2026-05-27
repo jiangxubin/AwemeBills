@@ -77,7 +77,7 @@ struct ExpenseEditorView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        save()
+                        Task { await save() }
                     }
                     .disabled(parsedAmount == nil || merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
@@ -85,7 +85,8 @@ struct ExpenseEditorView: View {
         }
     }
 
-    private func save() {
+    @MainActor
+    private func save() async {
         guard let parsedAmount else { return }
         let trimmedMerchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
         let payment = ParsedPayment(
@@ -113,6 +114,8 @@ struct ExpenseEditorView: View {
             editingRecord.note = note
             editingRecord.occurredAt = occurredAt
             PaymentRuleEngine.learnRule(from: editingRecord, context: modelContext)
+            try? modelContext.save()
+            await ExpenseMutationService.refreshReportsAndNotifications(context: modelContext)
             dismiss()
             return
         }
@@ -128,6 +131,8 @@ struct ExpenseEditorView: View {
         )
         modelContext.insert(record)
         PaymentRuleEngine.learnRule(from: record, context: modelContext)
+        try? modelContext.save()
+        await ExpenseMutationService.refreshReportsAndNotifications(context: modelContext)
         dismiss()
     }
 }

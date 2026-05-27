@@ -135,6 +135,8 @@ enum ImportPipeline {
             batch.status = .accepted
         } else if batch.duplicateCount == candidates.count, !candidates.isEmpty {
             batch.status = .duplicate
+        } else if !candidates.isEmpty, candidates.allSatisfy({ $0.status == .ignored }) {
+            batch.status = .ignored
         } else {
             batch.status = .failed
         }

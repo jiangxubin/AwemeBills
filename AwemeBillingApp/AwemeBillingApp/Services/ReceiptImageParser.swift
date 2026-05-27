@@ -10,29 +10,28 @@ enum ReceiptImageParser {
 
     static func parseAll(image: UIImage) async throws -> [ParsedPayment] {
         let preparedImage = image.awemeBillingPreparedForOCR()
-
+        var tencentText: String?
         if let credentials = tencentOCRCredentials {
-            if let text = try? await recognizeTextWithTencentOCR(image: preparedImage, credentials: credentials),
-               !text.isEmpty {
-                let payments = PaymentTextParser.parseAll(text)
-                if !payments.isEmpty {
-                    return payments
-                }
+            tencentText = try? await recognizeTextWithTencentOCR(image: preparedImage, credentials: credentials)
+            let tencentPayments = parseOCRTexts(tencentText: tencentText, visionText: "")
+            if !tencentPayments.isEmpty {
+                return tencentPayments
             }
         }
 
-        if let ocrSpaceAPIKey, !ocrSpaceAPIKey.isEmpty {
-            if let text = try? await recognizeTextWithOCRSpace(image: preparedImage, apiKey: ocrSpaceAPIKey),
-               !text.isEmpty {
-                let payments = PaymentTextParser.parseAll(text)
-                if !payments.isEmpty {
-                    return payments
-                }
+        let visionText = try await recognizeText(image: preparedImage)
+        return parseOCRTexts(tencentText: nil, visionText: visionText)
+    }
+
+    static func parseOCRTexts(tencentText: String?, visionText: String) -> [ParsedPayment] {
+        if let tencentText {
+            let tencentPayments = PaymentTextParser.parseAll(tencentText)
+            if !tencentPayments.isEmpty {
+                return tencentPayments
             }
         }
 
-        let text = try await recognizeText(image: preparedImage)
-        return PaymentTextParser.parseAll(text)
+        return PaymentTextParser.parseAll(visionText)
     }
 
     private static func recognizeTextWithTencentOCR(image: UIImage, credentials: TencentOCRCredentials) async throws -> String? {
@@ -133,61 +132,6 @@ enum ReceiptImageParser {
                 continuation.resume(throwing: error)
             }
         }
-    }
-
-    private static func recognizeTextWithOCRSpace(image: UIImage, apiKey: String) async throws -> String? {
-        guard let imageData = image.jpegData(compressionQuality: 0.82) else { return nil }
-
-        let formItems = [
-            URLQueryItem(name: "base64Image", value: "data:image/jpeg;base64,\(imageData.base64EncodedString())"),
-            URLQueryItem(name: "language", value: "chs"),
-            URLQueryItem(name: "isOverlayRequired", value: "false"),
-            URLQueryItem(name: "detectOrientation", value: "true"),
-            URLQueryItem(name: "scale", value: "true"),
-            URLQueryItem(name: "OCREngine", value: "2")
-        ]
-
-        var components = URLComponents()
-        components.queryItems = formItems
-
-        let url = URL(string: "https://api.ocr.space/parse/image")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue(apiKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
-        request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
-            return nil
-        }
-
-        guard
-            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let parsedResults = root["ParsedResults"] as? [[String: Any]]
-        else { return nil }
-
-        if root["IsErroredOnProcessing"] as? Bool == true {
-            return nil
-        }
-
-        let text = parsedResults
-            .compactMap { $0["ParsedText"] as? String }
-            .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? nil : text
-    }
-
-    private static var ocrSpaceAPIKey: String? {
-        let environmentKey = ProcessInfo.processInfo.environment["OCR_SPACE_API_KEY"]
-        if let environmentKey, !environmentKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return environmentKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        let bundleKey = (Bundle.main.object(forInfoDictionaryKey: "OCRSpaceAPIKey") as? String)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let bundleKey, !bundleKey.isEmpty, !bundleKey.hasPrefix("$(") else { return nil }
-        return bundleKey
     }
 
     private static var tencentOCRCredentials: TencentOCRCredentials? {

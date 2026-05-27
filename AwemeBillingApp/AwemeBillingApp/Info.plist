@@ -14,8 +14,6 @@
 	<string>消费管家</string>
 	<key>CFBundleDisplayName</key>
 	<string>消费管家</string>
-	<key>OCRSpaceAPIKey</key>
-	<string>$(OCR_SPACE_API_KEY)</string>
 	<key>TencentOCRSecretId</key>
 	<string>$(TENCENT_OCR_SECRET_ID)</string>
 	<key>TencentOCRSecretKey</key>

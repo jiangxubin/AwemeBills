@@ -5,10 +5,8 @@ struct OverviewView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ExpenseRecord.occurredAt, order: .reverse) private var records: [ExpenseRecord]
     @Query(sort: \BudgetPlan.createdAt, order: .reverse) private var budgets: [BudgetPlan]
-    @Query(sort: \ArchiveSchedule.periodRaw) private var schedules: [ArchiveSchedule]
-    @Query(sort: \ArchiveReport.generatedAt, order: .reverse) private var reports: [ArchiveReport]
     @State private var selectedPeriod: SummaryPeriod = .month
-    @State private var reportStatusMessage = ""
+    @State private var showingEditor = false
 
     private var scopedRecords: [ExpenseRecord] {
         BillingAnalytics.records(records, in: selectedPeriod)
@@ -28,8 +26,7 @@ struct OverviewView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     periodPicker
                     summaryCard
-                    insightSection
-                    reportSection
+                    quickActionSection
                     budgetSection
                     categorySection
                     recentSection
@@ -41,6 +38,9 @@ struct OverviewView: View {
             .background(AppTheme.background)
             .navigationTitle("总览")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showingEditor) {
+                ExpenseEditorView()
+            }
         }
     }
 
@@ -86,24 +86,16 @@ struct OverviewView: View {
         }
     }
 
-    private var insightSection: some View {
-        let insights = spendingInsights
-
-        return VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "消费洞察", subtitle: "优先看需要行动的变化")
+    private var quickActionSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "快速入账", subtitle: "手动补一笔")
             AppCard {
-                if insights.isEmpty {
-                    EmptyStateView(title: "记录更多消费后生成洞察", systemImage: "sparkles")
-                } else {
-                    VStack(spacing: 12) {
-                        ForEach(insights) { insight in
-                            SpendingInsightRow(insight: insight)
-                            if insight.id != insights.last?.id {
-                                Divider()
-                            }
-                        }
-                    }
-                }
+                OverviewActionButton(
+                    title: "记一笔",
+                    subtitle: "手动新增消费记录",
+                    systemImage: "plus.circle",
+                    action: { showingEditor = true }
+                )
             }
         }
     }
@@ -149,46 +141,6 @@ struct OverviewView: View {
                         }
                         .buttonStyle(.bordered)
                     }
-                }
-            }
-        }
-    }
-
-    private var reportSection: some View {
-        let periodReports = visibleReports
-
-        return VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "消费总结", subtitle: periodReports.isEmpty ? "\(selectedPeriod.rawValue)历史" : "\(periodReports.count) 份")
-            AppCard {
-                VStack(alignment: .leading, spacing: 14) {
-                    if periodReports.isEmpty {
-                        EmptyStateView(title: "暂无\(selectedPeriod.rawValue)消费总结", systemImage: "doc.text.magnifyingglass")
-                    } else {
-                        VStack(spacing: 0) {
-                            ForEach(periodReports.indices, id: \.self) { index in
-                                ArchiveReportRow(report: periodReports[index])
-                                    .padding(.vertical, 12)
-                                if index < periodReports.count - 1 {
-                                    Divider()
-                                }
-                            }
-                        }
-                    }
-
-                    if !reportStatusMessage.isEmpty {
-                        Text(reportStatusMessage)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Button {
-                        rebuildReports()
-                    } label: {
-                        Label("刷新消费总结", systemImage: "arrow.clockwise")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
                 }
             }
         }
@@ -245,145 +197,6 @@ struct OverviewView: View {
         }
     }
 
-    private var visibleReports: [ArchiveReport] {
-        Array(
-            reports
-                .filter { $0.recordCount > 0 && $0.period == selectedPeriod }
-                .prefix(4)
-        )
-    }
-
-    private var spendingInsights: [SpendingInsight] {
-        guard !scopedRecords.isEmpty else { return [] }
-
-        var insights: [SpendingInsight] = []
-        let currentTotal = BillingAnalytics.total(scopedRecords)
-
-        if let trend = trendInsight(currentTotal: currentTotal) {
-            insights.append(trend)
-        }
-
-        if let concentration = concentrationInsight(currentTotal: currentTotal) {
-            insights.append(concentration)
-        }
-
-        let unarchivedCount = scopedRecords.filter { !$0.isArchived }.count
-        if unarchivedCount > 0 {
-            insights.append(
-                SpendingInsight(
-                    title: "还有 \(unarchivedCount) 笔未整理",
-                    detail: "整理后，周期总结会更干净，复盘时也更容易定位异常。",
-                    systemImage: "archivebox",
-                    tint: AppTheme.amber
-                )
-            )
-        } else {
-            insights.append(
-                SpendingInsight(
-                    title: "本期消费都已整理",
-                    detail: "记录状态良好，可以直接查看周期消费总结。",
-                    systemImage: "checkmark.seal",
-                    tint: AppTheme.teal
-                )
-            )
-        }
-
-        return Array(insights.prefix(3))
-    }
-
-    private func trendInsight(currentTotal: Decimal) -> SpendingInsight? {
-        guard let previousInterval = BillingAnalytics.completedPeriodInterval(for: selectedPeriod, before: .now) else {
-            return nil
-        }
-
-        let previousRecords = records.filter {
-            $0.occurredAt >= previousInterval.start && $0.occurredAt < previousInterval.end
-        }
-        let previousTotal = BillingAnalytics.total(previousRecords)
-
-        guard previousTotal > .zero else {
-            return SpendingInsight(
-                title: "\(selectedPeriod.rawValue)支出 \(BillingAnalytics.currency(currentTotal))",
-                detail: "上一完整周期暂无可比数据，先把这期作为你的基线。",
-                systemImage: selectedPeriod.iconName,
-                tint: AppTheme.accent
-            )
-        }
-
-        let currentValue = (currentTotal as NSDecimalNumber).doubleValue
-        let previousValue = max((previousTotal as NSDecimalNumber).doubleValue, 0.01)
-        let delta = (currentValue - previousValue) / previousValue
-        let percentText = percentText(abs(delta))
-        let isHigher = delta > 0.02
-        let isLower = delta < -0.02
-
-        if isHigher {
-            return SpendingInsight(
-                title: "较上一完整周期高 \(percentText)",
-                detail: "优先看高额分类和最近消费，确认是不是一次性支出。",
-                systemImage: "arrow.up.right",
-                tint: .red
-            )
-        }
-
-        if isLower {
-            return SpendingInsight(
-                title: "较上一完整周期低 \(percentText)",
-                detail: "支出节奏变轻，可以维持当前预算线。",
-                systemImage: "arrow.down.right",
-                tint: AppTheme.teal
-            )
-        }
-
-        return SpendingInsight(
-            title: "支出节奏基本持平",
-            detail: "和上一完整周期接近，重点关注结构变化。",
-            systemImage: "equal",
-            tint: AppTheme.accent
-        )
-    }
-
-    private func concentrationInsight(currentTotal: Decimal) -> SpendingInsight? {
-        guard currentTotal > .zero else { return nil }
-
-        if let topScene = sceneTotals.first, topScene.scene != "未标记场景" {
-            return concentrationInsight(
-                title: "\(topScene.scene) 是主要场景",
-                amount: topScene.amount,
-                currentTotal: currentTotal,
-                detailPrefix: "\(topScene.count) 笔集中在这里"
-            )
-        }
-
-        guard let topCategory = categoryTotals.first else { return nil }
-        return concentrationInsight(
-            title: "\(topCategory.name) 占比最高",
-            amount: topCategory.amount,
-            currentTotal: currentTotal,
-            detailPrefix: "这是本期最大的消费结构"
-        )
-    }
-
-    private func concentrationInsight(
-        title: String,
-        amount: Decimal,
-        currentTotal: Decimal,
-        detailPrefix: String
-    ) -> SpendingInsight {
-        let amountValue = (amount as NSDecimalNumber).doubleValue
-        let totalValue = max((currentTotal as NSDecimalNumber).doubleValue, 0.01)
-        let share = amountValue / totalValue
-        let shareText = percentText(share)
-        let tint: Color = share >= 0.45 ? AppTheme.amber : AppTheme.accent
-
-        return SpendingInsight(
-            title: title,
-            detail: "\(detailPrefix)，占本期 \(shareText)。",
-            systemImage: "target",
-            tint: tint
-        )
-    }
-
     private func suggestedBudgetAmount(for spent: Decimal) -> Decimal {
         let spentValue = (spent as NSDecimalNumber).doubleValue
         let base: Double = switch selectedPeriod {
@@ -406,39 +219,10 @@ struct OverviewView: View {
         try? modelContext.save()
     }
 
-    private func rebuildReports() {
-        let cleanup = ExpenseRecordMaintenance.cleanup(records: records, context: modelContext)
-        let currentRecords = (try? modelContext.fetch(FetchDescriptor<ExpenseRecord>())) ?? records
-        let currentReports = (try? modelContext.fetch(FetchDescriptor<ArchiveReport>())) ?? reports
-        let rebuilt = ArchiveReportService.rebuildReports(
-            schedules: schedules,
-            records: currentRecords,
-            existingReports: currentReports,
-            context: modelContext
-        )
-        try? modelContext.save()
-
-        let periodCount = rebuilt.filter { $0.period == selectedPeriod && $0.recordCount > 0 }.count
-        if cleanup.didChange {
-            reportStatusMessage = "已清理 \(cleanup.removedSeedRecords + cleanup.removedDuplicateRecords) 条脏/重复明细，并刷新消费总结。"
-        } else if periodCount == 0 {
-            reportStatusMessage = "暂无可生成的\(selectedPeriod.rawValue)消费总结。"
-        } else {
-            reportStatusMessage = "已刷新 \(periodCount) 份\(selectedPeriod.rawValue)消费总结。"
-        }
-    }
-
     private func budgetPercentText(spent: Decimal, limit: Decimal) -> String {
         let spentValue = (spent as NSDecimalNumber).doubleValue
         let limitValue = max((limit as NSDecimalNumber).doubleValue, 1)
         return "\(Int((spentValue / limitValue * 100).rounded()))%"
-    }
-
-    private func percentText(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .percent
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "\(Int((value * 100).rounded()))%"
     }
 
     private func budgetTint(spent: Decimal, limit: Decimal) -> Color {
@@ -446,39 +230,41 @@ struct OverviewView: View {
     }
 }
 
-private struct SpendingInsight: Identifiable {
-    let id = UUID()
+private struct OverviewActionButton: View {
     let title: String
-    let detail: String
+    let subtitle: String
     let systemImage: String
-    let tint: Color
-}
-
-private struct SpendingInsightRow: View {
-    let insight: SpendingInsight
+    let action: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: insight.systemImage)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(insight.tint)
-                .frame(width: 34, height: 34)
-                .background(insight.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(insight.title)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(AppTheme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(insight.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                    Text(subtitle)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 86, alignment: .leading)
+            .padding(12)
+            .background(AppTheme.elevatedCard, in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(AppTheme.cardStroke, lineWidth: 1)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(insight.title)，\(insight.detail)")
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title)，\(subtitle)")
     }
 }
 

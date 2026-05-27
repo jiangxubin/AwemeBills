@@ -6,11 +6,14 @@ import UIKit
 struct PaymentMonitorView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ParsedPaymentCandidate.createdAt, order: .reverse) private var candidates: [ParsedPaymentCandidate]
-    @State private var importMode: ImportMode = .screenshot
+    @Query(sort: \ImportBatch.createdAt, order: .reverse) private var batches: [ImportBatch]
+    @Binding var importMode: ImportMode
+    let reviewRouteID: UUID
     @State private var rawText = ""
     @State private var importMessage = ""
     @State private var importSucceeded = false
     @State private var lastBatchID: String?
+    @State private var reviewScope: ReviewScope = .allPending
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var selectedImage: UIImage?
     @State private var isParsingImage = false
@@ -28,10 +31,13 @@ struct PaymentMonitorView: View {
                 .padding(.bottom, 118)
             }
             .background(AppTheme.background)
-            .navigationTitle("接入")
+            .navigationTitle("导入")
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: selectedPhoto) { _, newValue in
                 Task { await loadImage(from: newValue) }
+            }
+            .onChange(of: reviewRouteID) { _, _ in
+                focusReviewQueue()
             }
         }
     }
@@ -48,7 +54,7 @@ struct PaymentMonitorView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("导入消费")
                         .font(.title2.weight(.bold))
-                    Text("从截图或通知文本解析金额、商户、时间和渠道；先复核，再入账，避免误记和重复。")
+                    Text("从截图或通知文本解析金额、商户、时间和渠道；识别结果先复核，再入账。")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -61,6 +67,12 @@ struct PaymentMonitorView: View {
             SectionHeader(title: "导入方式", subtitle: "截图 / 文本")
             AppCard {
                 VStack(alignment: .leading, spacing: 16) {
+                    SettingsInfoRow(
+                        title: "截图识别",
+                        systemImage: "text.viewfinder",
+                        text: "会自动识别账单截图；识别不到时自动换一种方式重试，结果先进入复核。"
+                    )
+
                     HStack(spacing: 12) {
                         PhotosPicker(selection: $selectedPhoto, matching: .images) {
                             ImportActionTile(
@@ -157,6 +169,17 @@ struct PaymentMonitorView: View {
             SectionHeader(title: "导入复核", subtitle: reviewSubtitle)
             AppCard {
                 VStack(alignment: .leading, spacing: 12) {
+                    reviewQueueSummary
+
+                    if canSwitchReviewScope {
+                        Picker("复核范围", selection: $reviewScope) {
+                            ForEach(ReviewScope.allCases) { scope in
+                                Text(scope.rawValue).tag(scope)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
                     ImportReviewView(
                         candidates: reviewCandidates,
                         onAccepted: { candidate in
@@ -172,6 +195,13 @@ struct PaymentMonitorView: View {
                         }
                     )
 
+                    if let duplicateText = duplicateSummaryText {
+                        Label(duplicateText, systemImage: "doc.on.doc")
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
                     if !importMessage.isEmpty {
                         Label(importMessage, systemImage: importSucceeded ? "checkmark.circle.fill" : "info.circle.fill")
                             .font(.footnote.weight(.medium))
@@ -184,43 +214,115 @@ struct PaymentMonitorView: View {
     }
 
     private var reviewSubtitle: String {
-        let pendingCount = candidates.filter { $0.status == .pendingReview }.count
+        let pendingCount = pendingCandidates.count
         return pendingCount == 0 ? "无待确认" : "\(pendingCount) 笔待确认"
     }
 
     private var reviewCandidates: [ParsedPaymentCandidate] {
-        if let lastBatchID {
-            let batchItems = candidates.filter { $0.batchID == lastBatchID && $0.status == .pendingReview }
-            if !batchItems.isEmpty {
-                return batchItems
-            }
+        let source = reviewScope == .currentBatch && !currentBatchPendingCandidates.isEmpty
+            ? currentBatchPendingCandidates
+            : pendingCandidates
+        return Array(source.prefix(8))
+    }
+
+    private var pendingCandidates: [ParsedPaymentCandidate] {
+        candidates.filter { $0.status == .pendingReview }
+    }
+
+    private var currentBatchPendingCandidates: [ParsedPaymentCandidate] {
+        guard let lastBatchID else { return [] }
+        return pendingCandidates.filter { $0.batchID == lastBatchID }
+    }
+
+    private var latestPendingBatch: ImportBatch? {
+        batches.first { batch in
+            pendingCandidates.contains { $0.batchID == batch.idString }
         }
-        guard importMessage.isEmpty else { return [] }
-        return Array(candidates.filter { $0.status == .pendingReview }.prefix(8))
+    }
+
+    private var currentBatch: ImportBatch? {
+        guard let lastBatchID else { return nil }
+        return batches.first { $0.idString == lastBatchID }
+    }
+
+    private var canSwitchReviewScope: Bool {
+        !currentBatchPendingCandidates.isEmpty && pendingCandidates.count > currentBatchPendingCandidates.count
+    }
+
+    private var reviewQueueSummary: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Label("\(pendingCandidates.count) 笔待复核", systemImage: "checklist")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                if let batch = visibleBatch {
+                    Text(batch.source.rawValue)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.accent)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppTheme.accent.opacity(0.10), in: Capsule())
+                }
+            }
+
+            Text(queueSubtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var queueSubtitle: String {
+        if let batch = visibleBatch {
+            let dateText = batch.createdAt.formatted(.dateTime.month().day().hour().minute())
+            return "最近来自\(batch.source.rawValue) · \(dateText)。识别结果会先复核，再入账。"
+        }
+        return pendingCandidates.isEmpty
+            ? "暂无待复核账单。可以导入截图、粘贴通知文本，或手动记一笔。"
+            : "识别结果会先复核，再入账。"
+    }
+
+    private var visibleBatch: ImportBatch? {
+        currentBatch ?? latestPendingBatch
+    }
+
+    private var duplicateSummaryText: String? {
+        let scopedCandidates: [ParsedPaymentCandidate]
+        if let lastBatchID {
+            scopedCandidates = candidates.filter { $0.batchID == lastBatchID }
+        } else {
+            scopedCandidates = candidates
+        }
+        let duplicateCount = scopedCandidates.filter { $0.status == .duplicate }.count
+        guard duplicateCount > 0 else { return nil }
+        return "\(duplicateCount) 笔疑似重复，已按商户、金额、支付渠道和分钟级时间匹配标记。"
     }
 
     private func parseTextToCandidates() {
         let payments = PaymentTextParser.parseAll(rawText)
         guard !payments.isEmpty else {
             importSucceeded = false
-            importMessage = "没有识别到金额，请检查文本里是否包含金额。"
+            importMessage = "未识别出有效消费，请粘贴更完整的支付通知文本或手动记一笔。"
             return
         }
 
-        let candidates = ImportPipeline.createBatch(
+        let newCandidates = ImportPipeline.createBatch(
             source: .paste,
             rawText: rawText,
             payments: payments,
             scene: "文本解析",
             context: modelContext
         )
-        let pending = candidates.filter { $0.status == .pendingReview }
-        lastBatchID = pending.first?.batchID
-        let duplicate = candidates.count - pending.count
+        let pending = newCandidates.filter { $0.status == .pendingReview }
+        lastBatchID = newCandidates.first?.batchID
+        reviewScope = pending.isEmpty ? .allPending : .currentBatch
+        let duplicate = newCandidates.count - pending.count
         importSucceeded = !pending.isEmpty
         importMessage = duplicate > 0
-            ? "已生成 \(pending.count) 笔待复核，标记 \(duplicate) 笔重复。"
-            : "已生成 \(pending.count) 笔待复核账单。"
+            ? "已自动识别 \(pending.count) 笔待复核账单，另有 \(duplicate) 笔疑似重复。请核对金额和商户。"
+            : "已自动识别 \(pending.count) 笔待复核账单，请核对金额和商户。"
     }
 
     @MainActor
@@ -233,12 +335,12 @@ struct PaymentMonitorView: View {
             let payments = try await ReceiptImageParser.parseAll(image: image)
             guard !payments.isEmpty else {
                 importSucceeded = false
-                importMessage = "截图里没有识别到可归档的消费记录。"
+                importMessage = "未识别出有效消费，请粘贴通知文本或手动记一笔。"
                 return
             }
 
             let rawText = payments.map(\.note).joined(separator: "\n---\n")
-            let candidates = ImportPipeline.createBatch(
+            let newCandidates = ImportPipeline.createBatch(
                 source: .screenshot,
                 rawText: rawText,
                 payments: payments,
@@ -247,16 +349,17 @@ struct PaymentMonitorView: View {
             )
             selectedImage = nil
             selectedPhoto = nil
-            let pending = candidates.filter { $0.status == .pendingReview }
-            lastBatchID = pending.first?.batchID
-            let skippedCount = candidates.count - pending.count
+            let pending = newCandidates.filter { $0.status == .pendingReview }
+            lastBatchID = newCandidates.first?.batchID
+            reviewScope = pending.isEmpty ? .allPending : .currentBatch
+            let skippedCount = newCandidates.count - pending.count
             importSucceeded = !pending.isEmpty
             importMessage = skippedCount > 0
-                ? "已生成 \(pending.count) 笔待复核，标记 \(skippedCount) 笔重复。"
-                : "已生成 \(pending.count) 笔待复核账单。"
+                ? "已自动识别 \(pending.count) 笔待复核账单，另有 \(skippedCount) 笔疑似重复。请核对金额和商户。"
+                : "已自动识别 \(pending.count) 笔待复核账单，请核对金额和商户。"
         } catch {
             importSucceeded = false
-            importMessage = "截图解析失败：\(error.localizedDescription)"
+            importMessage = "截图识别暂时失败，请粘贴通知文本或手动记一笔。"
         }
     }
 
@@ -301,22 +404,7 @@ struct PaymentMonitorView: View {
 
     @MainActor
     private func refreshSummaryNotifications() async {
-        do {
-            let schedules = try modelContext.fetch(FetchDescriptor<ArchiveSchedule>())
-            let records = try modelContext.fetch(FetchDescriptor<ExpenseRecord>())
-            let reports = try modelContext.fetch(FetchDescriptor<ArchiveReport>())
-            ArchiveReportService.rebuildReports(
-                schedules: schedules,
-                records: records,
-                existingReports: reports,
-                context: modelContext
-            )
-            if try await ArchiveNotificationService.scheduleAll(schedules, records: records, requestAuthorizationIfNeeded: false) {
-                try? modelContext.save()
-            }
-        } catch {
-            print("Failed to refresh summary notifications: \(error)")
-        }
+        await ExpenseMutationService.refreshReportsAndNotifications(context: modelContext)
     }
 
     @MainActor
@@ -328,12 +416,13 @@ struct PaymentMonitorView: View {
                 importMode = .screenshot
                 selectedImage = image.awemeBillingPreparedForOCR(maxPixelDimension: 2200)
                 lastBatchID = nil
+                reviewScope = .allPending
                 importSucceeded = false
                 importMessage = "截图已载入，可以开始解析。"
             }
         } catch {
             importSucceeded = false
-            importMessage = "读取图片失败：\(error.localizedDescription)"
+            importMessage = "读取图片失败，请换一张截图再试。"
         }
     }
 
@@ -344,11 +433,25 @@ struct PaymentMonitorView: View {
             lastBatchID = nil
         }
     }
+
+    private func focusReviewQueue() {
+        lastBatchID = (latestPendingBatch ?? batches.first)?.idString
+        reviewScope = lastBatchID == nil ? .allPending : .currentBatch
+        importSucceeded = false
+        importMessage = ""
+    }
 }
 
-private enum ImportMode {
+enum ImportMode {
     case screenshot
     case text
+}
+
+private enum ReviewScope: String, CaseIterable, Identifiable {
+    case currentBatch = "当前批次"
+    case allPending = "全部待复核"
+
+    var id: String { rawValue }
 }
 
 private struct ImportActionTile: View {

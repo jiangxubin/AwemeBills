@@ -52,33 +52,40 @@ final class ShareViewController: UIViewController {
             }
 
             let context = ModelContext(DataController.sharedModelContainer)
-            for payment in payments {
-                let record = ExpenseRecord(
-                    amount: payment.amount,
-                    merchant: payment.merchant,
-                    category: payment.category,
-                    scene: "相册分享",
-                    channel: payment.channel,
-                    note: payment.note,
-                    occurredAt: payment.occurredAt ?? .now,
-                    isArchived: true
-                )
-                context.insert(record)
-            }
+            let rawText = payments.map(\.note).joined(separator: "\n---\n")
+            let candidates = ImportPipeline.createBatch(
+                source: .shareExtension,
+                rawText: rawText,
+                payments: payments,
+                scene: "相册分享",
+                context: context
+            )
             try context.save()
 
-            let total = payments.reduce(Decimal.zero) { $0 + $1.amount }
-            finish(message: "已归档 \(payments.count) 笔：\(BillingAnalytics.currency(total))")
+            let pendingCount = candidates.filter { $0.status == .pendingReview }.count
+            let duplicateCount = candidates.count - pendingCount
+            let message = pendingCount == 0
+                ? "识别到的消费都已存在。"
+                : duplicateCount > 0
+                    ? "已生成 \(pendingCount) 笔待复核，跳过 \(duplicateCount) 笔重复。"
+                    : "已生成 \(pendingCount) 笔待复核账单。"
+            finish(message: message, openMainApp: pendingCount > 0)
         } catch {
             finish(message: "解析失败：\(error.localizedDescription)")
         }
     }
 
-    private func finish(message: String) {
+    private func finish(message: String, openMainApp: Bool = false) {
         activityIndicator.stopAnimating()
         statusLabel.text = message
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            self.extensionContext?.completeRequest(returningItems: nil)
+            if openMainApp, let url = URL(string: "awemebilling://review-import") {
+                self.extensionContext?.open(url) { _ in
+                    self.extensionContext?.completeRequest(returningItems: nil)
+                }
+            } else {
+                self.extensionContext?.completeRequest(returningItems: nil)
+            }
         }
     }
 

@@ -47,49 +47,23 @@ struct RecordExpenseIntent: AppIntent {
             occurredAt: .now,
             category: category
         )
-        let existingRecords = (try? context.fetch(FetchDescriptor<ExpenseRecord>())) ?? []
+        let candidates = ImportPipeline.createBatch(
+            source: .shortcutURL,
+            rawText: "\(payment.merchant) \(amount)",
+            payments: [payment],
+            scene: cleanScene.isEmpty ? "快捷指令" : cleanScene,
+            context: context
+        )
 
-        guard ExpenseRecordMaintenance.uniquePayments([payment], existing: existingRecords).first != nil else {
+        guard let candidate = candidates.first, let record = ImportPipeline.accept(candidate, context: context) else {
             return .result(dialog: "这笔消费已经存在，未重复记录。")
         }
 
-        let record = ExpenseRecord(
-            amount: payment.amount,
-            merchant: payment.merchant,
-            category: category,
-            scene: cleanScene.isEmpty ? "快捷指令" : cleanScene,
-            channel: channel,
-            note: note,
-            occurredAt: .now,
-            isArchived: true
-        )
-
-        context.insert(record)
         try context.save()
-        await refreshSummaryNotifications(context: context)
+        await ExpenseMutationService.refreshReportsAndNotifications(context: context)
 
         let amountText = BillingAnalytics.currency(record.amount)
         return .result(dialog: "已记录 \(record.merchant) \(amountText)。")
-    }
-
-    @MainActor
-    private func refreshSummaryNotifications(context: ModelContext) async {
-        do {
-            let schedules = try context.fetch(FetchDescriptor<ArchiveSchedule>())
-            let records = try context.fetch(FetchDescriptor<ExpenseRecord>())
-            let reports = try context.fetch(FetchDescriptor<ArchiveReport>())
-            ArchiveReportService.rebuildReports(
-                schedules: schedules,
-                records: records,
-                existingReports: reports,
-                context: context
-            )
-            if try await ArchiveNotificationService.scheduleAll(schedules, records: records, requestAuthorizationIfNeeded: false) {
-                try? context.save()
-            }
-        } catch {
-            print("Failed to refresh summary notifications: \(error)")
-        }
     }
 }
 
@@ -121,14 +95,14 @@ struct AwemeBillingShortcutsProvider: AppShortcutsProvider {
 
 struct ImportExpenseScreenshotIntent: AppIntent {
     static var title: LocalizedStringResource = "导入消费截图"
-    static var description = IntentDescription("从快捷指令传入支付 App 截图，自动 OCR 识别并归档消费。")
-    static var openAppWhenRun = false
+    static var description = IntentDescription("从快捷指令传入支付 App 截图，识别后生成待复核账单。")
+    static var openAppWhenRun = true
 
     @Parameter(title: "截图", requestValueDialog: "请选择要导入的消费截图。")
     var screenshot: IntentFile
 
     static var parameterSummary: some ParameterSummary {
-        Summary("导入 \(\.$screenshot) 并归档消费")
+        Summary("导入 \(\.$screenshot) 并生成待复核账单")
     }
 
     @MainActor
@@ -139,58 +113,29 @@ struct ImportExpenseScreenshotIntent: AppIntent {
 
         let payments = try await ReceiptImageParser.parseAll(image: image)
         guard !payments.isEmpty else {
-            return .result(dialog: "没有从截图里识别到可归档的消费。")
+            return .result(dialog: "未识别出有效消费，请粘贴通知文本或手动记一笔。")
         }
 
         let context = ModelContext(DataController.sharedModelContainer)
-        let existingRecords = (try? context.fetch(FetchDescriptor<ExpenseRecord>())) ?? []
-        let uniquePayments = ExpenseRecordMaintenance.uniquePayments(payments, existing: existingRecords)
-
-        guard !uniquePayments.isEmpty else {
-            return .result(dialog: "已识别 \(payments.count) 笔，但都已经存在，未重复归档。")
-        }
-
-        for payment in uniquePayments {
-            let record = ExpenseRecord(
-                amount: payment.amount,
-                merchant: payment.merchant,
-                category: payment.category,
-                scene: "快捷指令截图导入",
-                channel: payment.channel,
-                note: payment.note,
-                occurredAt: payment.occurredAt ?? .now,
-                isArchived: true
-            )
-            context.insert(record)
-        }
+        let rawText = payments.map(\.note).joined(separator: "\n---\n")
+        let candidates = ImportPipeline.createBatch(
+            source: .shortcutURL,
+            rawText: rawText,
+            payments: payments,
+            scene: "快捷指令截图导入",
+            context: context
+        )
         try context.save()
-        await refreshSummaryNotifications(context: context)
 
-        let total = uniquePayments.reduce(Decimal.zero) { $0 + $1.amount }
-        let skippedCount = payments.count - uniquePayments.count
-        let dialog = skippedCount > 0
-            ? "已归档 \(uniquePayments.count) 笔消费，跳过 \(skippedCount) 笔重复，共 \(BillingAnalytics.currency(total))。"
-            : "已归档 \(uniquePayments.count) 笔消费，共 \(BillingAnalytics.currency(total))。"
-        return .result(dialog: "\(dialog)")
-    }
-
-    @MainActor
-    private func refreshSummaryNotifications(context: ModelContext) async {
-        do {
-            let schedules = try context.fetch(FetchDescriptor<ArchiveSchedule>())
-            let records = try context.fetch(FetchDescriptor<ExpenseRecord>())
-            let reports = try context.fetch(FetchDescriptor<ArchiveReport>())
-            ArchiveReportService.rebuildReports(
-                schedules: schedules,
-                records: records,
-                existingReports: reports,
-                context: context
-            )
-            if try await ArchiveNotificationService.scheduleAll(schedules, records: records, requestAuthorizationIfNeeded: false) {
-                try? context.save()
-            }
-        } catch {
-            print("Failed to refresh summary notifications: \(error)")
+        let pendingCount = candidates.filter { $0.status == .pendingReview }.count
+        let skippedCount = candidates.count - pendingCount
+        guard pendingCount > 0 else {
+            return .result(dialog: "已识别 \(payments.count) 笔，但都已经存在，未重复导入。")
         }
+
+        let dialog = skippedCount > 0
+            ? "已生成 \(pendingCount) 笔待复核账单，跳过 \(skippedCount) 笔重复。"
+            : "已生成 \(pendingCount) 笔待复核账单，请在消费管家确认入账。"
+        return .result(dialog: "\(dialog)")
     }
 }

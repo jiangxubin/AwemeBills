@@ -16,6 +16,7 @@ enum ImportBatchStatus: String {
     case pendingReview = "待复核"
     case accepted = "已入账"
     case partial = "部分入账"
+    case ignored = "已忽略"
     case duplicate = "重复"
     case failed = "失败"
 }

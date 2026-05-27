@@ -35,6 +35,8 @@
 		000000000000000000000136 /* ImportPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000228 /* ImportPipeline.swift */; };
 		000000000000000000000137 /* ImportReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000229 /* ImportReviewView.swift */; };
 		000000000000000000000140 /* ProfileSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000233 /* ProfileSettingsView.swift */; };
+		000000000000000000000141 /* ExpenseMutationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000234 /* ExpenseMutationService.swift */; };
+		000000000000000000000142 /* AwemeBillingCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000235 /* AwemeBillingCoreTests.swift */; };
 		000000000000000000000120 /* AwemeBillingShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 000000000000000000000002 /* AwemeBillingShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		000000000000000000000121 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000230 /* ShareViewController.swift */; };
 		000000000000000000000122 /* ExpenseRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000203 /* ExpenseRecord.swift */; };
@@ -47,6 +49,8 @@
 		000000000000000000000132 /* ArchiveReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000223 /* ArchiveReport.swift */; };
 		000000000000000000000138 /* ImportModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000225 /* ImportModels.swift */; };
 		000000000000000000000139 /* PaymentRuleEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000226 /* PaymentRuleEngine.swift */; };
+		000000000000000000000143 /* ImportFingerprint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000227 /* ImportFingerprint.swift */; };
+		000000000000000000000144 /* ImportPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000228 /* ImportPipeline.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,6 +60,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 000000000000000000000602;
 			remoteInfo = AwemeBillingShareExtension;
+		};
+		000000000000000000000B02 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000901 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000000000601;
+			remoteInfo = AwemeBillingApp;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -76,6 +87,7 @@
 /* Begin PBXFileReference section */
 		000000000000000000000001 /* AwemeBillingApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AwemeBillingApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		000000000000000000000002 /* AwemeBillingShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AwemeBillingShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000003 /* AwemeBillingTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AwemeBillingTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		000000000000000000000201 /* AwemeBillingApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AwemeBillingApp.swift; sourceTree = "<group>"; };
 		000000000000000000000202 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		000000000000000000000203 /* ExpenseRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseRecord.swift; sourceTree = "<group>"; };
@@ -109,6 +121,8 @@
 		000000000000000000000231 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		000000000000000000000232 /* AwemeBillingShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AwemeBillingShareExtension.entitlements; sourceTree = "<group>"; };
 		000000000000000000000233 /* ProfileSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSettingsView.swift; sourceTree = "<group>"; };
+		000000000000000000000234 /* ExpenseMutationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseMutationService.swift; sourceTree = "<group>"; };
+		000000000000000000000235 /* AwemeBillingCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AwemeBillingCoreTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -126,6 +140,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		000000000000000000000808 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -134,6 +155,7 @@
 			children = (
 				000000000000000000000402 /* AwemeBillingApp */,
 				000000000000000000000404 /* AwemeBillingShareExtension */,
+				000000000000000000000405 /* AwemeBillingTests */,
 				000000000000000000000403 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -158,6 +180,7 @@
 			children = (
 				000000000000000000000001 /* AwemeBillingApp.app */,
 				000000000000000000000002 /* AwemeBillingShareExtension.appex */,
+				000000000000000000000003 /* AwemeBillingTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -189,6 +212,7 @@
 				000000000000000000000226 /* PaymentRuleEngine.swift */,
 				000000000000000000000227 /* ImportFingerprint.swift */,
 				000000000000000000000228 /* ImportPipeline.swift */,
+				000000000000000000000234 /* ExpenseMutationService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -216,6 +240,14 @@
 				000000000000000000000232 /* AwemeBillingShareExtension.entitlements */,
 			);
 			path = AwemeBillingShareExtension;
+			sourceTree = "<group>";
+		};
+		000000000000000000000405 /* AwemeBillingTests */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000235 /* AwemeBillingCoreTests.swift */,
+			);
+			path = AwemeBillingTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -257,6 +289,24 @@
 			productReference = 000000000000000000000002 /* AwemeBillingShareExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		000000000000000000000603 /* AwemeBillingTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000000000704 /* Build configuration list for PBXNativeTarget "AwemeBillingTests" */;
+			buildPhases = (
+				000000000000000000000807 /* Sources */,
+				000000000000000000000808 /* Frameworks */,
+				000000000000000000000809 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				000000000000000000000C02 /* PBXTargetDependency */,
+			);
+			name = AwemeBillingTests;
+			productName = AwemeBillingTests;
+			productReference = 000000000000000000000003 /* AwemeBillingTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -272,6 +322,10 @@
 					};
 					000000000000000000000602 = {
 						CreatedOnToolsVersion = 16.0;
+					};
+					000000000000000000000603 = {
+						CreatedOnToolsVersion = 17.0;
+						TestTargetID = 000000000000000000000601;
 					};
 				};
 			};
@@ -291,6 +345,7 @@
 			targets = (
 				000000000000000000000601 /* AwemeBillingApp */,
 				000000000000000000000602 /* AwemeBillingShareExtension */,
+				000000000000000000000603 /* AwemeBillingTests */,
 			);
 		};
 /* End PBXProject section */
@@ -305,6 +360,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		000000000000000000000805 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		000000000000000000000809 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -345,6 +407,7 @@
 				000000000000000000000136 /* ImportPipeline.swift in Sources */,
 				000000000000000000000137 /* ImportReviewView.swift in Sources */,
 				000000000000000000000140 /* ProfileSettingsView.swift in Sources */,
+				000000000000000000000141 /* ExpenseMutationService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -363,6 +426,16 @@
 				000000000000000000000132 /* ArchiveReport.swift in Sources */,
 				000000000000000000000138 /* ImportModels.swift in Sources */,
 				000000000000000000000139 /* PaymentRuleEngine.swift in Sources */,
+				000000000000000000000143 /* ImportFingerprint.swift in Sources */,
+				000000000000000000000144 /* ImportPipeline.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		000000000000000000000807 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				000000000000000000000142 /* AwemeBillingCoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -373,6 +446,11 @@
 			isa = PBXTargetDependency;
 			target = 000000000000000000000602 /* AwemeBillingShareExtension */;
 			targetProxy = 000000000000000000000B01 /* PBXContainerItemProxy */;
+		};
+		000000000000000000000C02 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000000000601 /* AwemeBillingApp */;
+			targetProxy = 000000000000000000000B02 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -596,6 +674,54 @@
 			};
 			name = Release;
 		};
+		000000000000000000000A07 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2NT2X9DHNP;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+					"@loader_path/../AwemeBillingApp.app",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = "$(BUILT_PRODUCTS_DIR)/AwemeBillingApp.app/AwemeBillingApp.debug.dylib";
+				PRODUCT_BUNDLE_IDENTIFIER = com.aweme.billing.personal.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		000000000000000000000A08 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2NT2X9DHNP;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+					"@loader_path/../AwemeBillingApp.app",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = "$(BUILT_PRODUCTS_DIR)/AwemeBillingApp.app/AwemeBillingApp.debug.dylib";
+				PRODUCT_BUNDLE_IDENTIFIER = com.aweme.billing.personal.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -622,6 +748,15 @@
 			buildConfigurations = (
 				000000000000000000000A05 /* Debug */,
 				000000000000000000000A06 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		000000000000000000000704 /* Build configuration list for PBXNativeTarget "AwemeBillingTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				000000000000000000000A07 /* Debug */,
+				000000000000000000000A08 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
