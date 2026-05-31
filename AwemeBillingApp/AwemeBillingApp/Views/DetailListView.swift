@@ -4,9 +4,9 @@ import SwiftUI
 struct DetailListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ExpenseRecord.occurredAt, order: .reverse) private var records: [ExpenseRecord]
+    @Query(sort: \ArchiveReport.generatedAt, order: .reverse) private var reports: [ArchiveReport]
     @AppStorage("detailDefaultPeriod") private var detailDefaultPeriod = "month"
-    @State private var showingEditor = false
-    @State private var editingRecord: ExpenseRecord?
+    @State private var editorRoute: ExpenseEditorRoute?
     @State private var selectedCategory: ExpenseCategory?
     @State private var displayMode: DetailDisplayMode = .records
     @State private var selectedPeriod: ExpensePeriodFilter = .all
@@ -52,22 +52,11 @@ struct DetailListView: View {
             .background(AppTheme.background)
             .navigationTitle("明细")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingEditor = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.headline)
-                    }
-                    .accessibilityLabel("新增消费")
+            .sheet(item: $editorRoute) { route in
+                switch route {
+                case .edit(let record):
+                    ExpenseEditorView(record: record)
                 }
-            }
-            .sheet(isPresented: $showingEditor) {
-                ExpenseEditorView()
-            }
-            .sheet(item: $editingRecord) { record in
-                ExpenseEditorView(record: record)
             }
             .onChange(of: displayMode) { _, newValue in
                 if newValue == .aggregate {
@@ -95,7 +84,7 @@ struct DetailListView: View {
                     pendingDeletion = nil
                 }
             } message: {
-                Text("删除后会同步刷新总览和报告。")
+                Text("删除后会同步刷新总览和历史总结。")
             }
         }
     }
@@ -174,27 +163,27 @@ struct DetailListView: View {
                 Section {
                     ForEach(dayRecords) { record in
                         Button {
-                            editingRecord = record
+                            editorRoute = .edit(record)
                         } label: {
                             ExpenseRow(record: record, showsCreatedAt: true)
                                 .padding(.vertical, 8)
                         }
                         .buttonStyle(.plain)
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    pendingDeletion = record
-                                } label: {
-                                    Label("删除", systemImage: "trash")
-                                }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                pendingDeletion = record
+                            } label: {
+                                Label("删除", systemImage: "trash")
                             }
-                            .swipeActions(edge: .leading) {
-                                Button {
-                                    Task { await toggleArchived(record) }
-                                } label: {
-                                    Label(record.isArchived ? "取消归档" : "归档", systemImage: "archivebox")
-                                }
-                                .tint(.teal)
+                        }
+                        .swipeActions(edge: .leading) {
+                            Button {
+                                Task { await toggleArchived(record) }
+                            } label: {
+                                Label(record.isArchived ? "取消归档" : "归档", systemImage: "archivebox")
                             }
+                            .tint(.teal)
+                        }
                     }
                 } header: {
                     HStack {
@@ -231,6 +220,92 @@ struct DetailListView: View {
                 Text("\(aggregateRows.count) 项")
             }
         }
+
+        if !detailInsights.isEmpty {
+            Section {
+                VStack(spacing: 12) {
+                    ForEach(detailInsights) { insight in
+                        DetailInsightRow(insight: insight)
+                    }
+                }
+                .padding(.vertical, 8)
+            } header: {
+                HStack {
+                    Text("消费洞察")
+                    Spacer()
+                    Text("\(scopedRecords.count) 笔")
+                }
+            }
+        }
+
+        Section {
+            if visibleReports.isEmpty {
+                EmptyStateView(title: "暂无历史总结", systemImage: "doc.text")
+                    .listRowBackground(AppTheme.card)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(visibleReports) { report in
+                        ArchiveReportRow(report: report)
+                            .padding(.vertical, 12)
+                        if report.id != visibleReports.last?.id {
+                            Divider()
+                                .padding(.leading, 46)
+                        }
+                    }
+                }
+            }
+        } header: {
+            HStack {
+                Text("历史总结")
+                Spacer()
+                Text(selectedPeriod.reportTitle)
+            }
+        }
+    }
+
+    private var detailInsights: [DetailInsight] {
+        guard !scopedRecords.isEmpty else { return [] }
+
+        let total = BillingAnalytics.total(scopedRecords)
+        var insights = [
+            DetailInsight(
+                title: "周期总支出",
+                value: BillingAnalytics.currency(total),
+                subtitle: "\(scopedRecords.count) 笔消费",
+                systemImage: "chart.pie"
+            )
+        ]
+
+        if let topAggregate = aggregateRows.first {
+            insights.append(
+                DetailInsight(
+                    title: "最高占比",
+                    value: topAggregate.title,
+                    subtitle: "\(BillingAnalytics.currency(topAggregate.amount)) · \(topAggregate.count) 笔",
+                    systemImage: selectedDimension.systemImage
+                )
+            )
+        }
+
+        let archivedCount = scopedRecords.filter(\.isArchived).count
+        insights.append(
+            DetailInsight(
+                title: "归档状态",
+                value: "\(archivedCount)/\(scopedRecords.count)",
+                subtitle: archivedCount == scopedRecords.count ? "已全部整理" : "还有 \(scopedRecords.count - archivedCount) 笔未归档",
+                systemImage: "archivebox"
+            )
+        )
+
+        return insights
+    }
+
+    private var visibleReports: [ArchiveReport] {
+        let nonEmptyReports = reports.filter { $0.recordCount > 0 }
+        if let summaryPeriod = selectedPeriod.summaryPeriod {
+            return Array(nonEmptyReports.filter { $0.period == summaryPeriod }.prefix(5))
+        }
+        return Array(nonEmptyReports.prefix(5))
     }
 
     private var deletionConfirmation: Binding<Bool> {
@@ -259,6 +334,17 @@ struct DetailListView: View {
     }
 }
 
+private enum ExpenseEditorRoute: Identifiable {
+    case edit(ExpenseRecord)
+
+    var id: String {
+        switch self {
+        case .edit(let record):
+            "edit-\(ObjectIdentifier(record).hashValue)"
+        }
+    }
+}
+
 private enum DetailDisplayMode: String, CaseIterable, Identifiable {
     case records = "明细"
     case aggregate = "聚合"
@@ -276,19 +362,62 @@ private enum ExpensePeriodFilter: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    func records(from records: [ExpenseRecord], now: Date = .now) -> [ExpenseRecord] {
-        guard self != .all else { return records }
-
-        let period: SummaryPeriod = switch self {
-        case .all: .year
+    var summaryPeriod: SummaryPeriod? {
+        switch self {
+        case .all: nil
         case .day: .day
         case .week: .week
         case .month: .month
         case .quarter: .quarter
         case .year: .year
         }
+    }
 
+    var reportTitle: String {
+        summaryPeriod?.rawValue ?? "最近 5 份"
+    }
+
+    func records(from records: [ExpenseRecord], now: Date = .now) -> [ExpenseRecord] {
+        guard let period = summaryPeriod else { return records }
         return BillingAnalytics.records(records, in: period, now: now)
+    }
+}
+
+private struct DetailInsight: Identifiable {
+    let id = UUID()
+    let title: String
+    let value: String
+    let subtitle: String
+    let systemImage: String
+}
+
+private struct DetailInsightRow: View {
+    let insight: DetailInsight
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: insight.systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 34, height: 34)
+                .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(insight.title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(insight.value)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Text(insight.subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
     }
 }
 

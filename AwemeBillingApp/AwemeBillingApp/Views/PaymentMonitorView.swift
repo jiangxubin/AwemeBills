@@ -9,6 +9,7 @@ struct PaymentMonitorView: View {
     @Query(sort: \ImportBatch.createdAt, order: .reverse) private var batches: [ImportBatch]
     @Binding var importMode: ImportMode
     let reviewRouteID: UUID
+    let manualImportRequestID: UUID
     @State private var rawText = ""
     @State private var importMessage = ""
     @State private var importSucceeded = false
@@ -17,12 +18,18 @@ struct PaymentMonitorView: View {
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var selectedImage: UIImage?
     @State private var isParsingImage = false
+    @State private var sheetRoute: PaymentMonitorSheetRoute?
+
+    private let importColumns = [
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10)
+    ]
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    heroCard
                     importCard
                     reviewCard
                 }
@@ -39,24 +46,16 @@ struct PaymentMonitorView: View {
             .onChange(of: reviewRouteID) { _, _ in
                 focusReviewQueue()
             }
-        }
-    }
-
-    private var heroCard: some View {
-        AppCard {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: "text.viewfinder")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(AppTheme.accent)
-                    .frame(width: 48, height: 48)
-                    .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("导入消费")
-                        .font(.title2.weight(.bold))
-                    Text("从截图或通知文本解析金额、商户、时间和渠道；识别结果先复核，再入账。")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+            .onChange(of: manualImportRequestID) { _, _ in
+                presentManualImport()
+            }
+            .sheet(item: $sheetRoute) { route in
+                switch route {
+                case .manualEditor:
+                    ExpenseEditorView {
+                        importSucceeded = true
+                        importMessage = "手动消费已入账。"
+                    }
                 }
             }
         }
@@ -64,16 +63,10 @@ struct PaymentMonitorView: View {
 
     private var importCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "导入方式", subtitle: "截图 / 文本")
+            SectionHeader(title: "导入方式", subtitle: "截图 / 文本 / 手动")
             AppCard {
                 VStack(alignment: .leading, spacing: 16) {
-                    SettingsInfoRow(
-                        title: "截图识别",
-                        systemImage: "text.viewfinder",
-                        text: "会自动识别账单截图；识别不到时自动换一种方式重试，结果先进入复核。"
-                    )
-
-                    HStack(spacing: 12) {
+                    LazyVGrid(columns: importColumns, spacing: 10) {
                         PhotosPicker(selection: $selectedPhoto, matching: .images) {
                             ImportActionTile(
                                 title: selectedImage == nil ? "截图导入" : "更换截图",
@@ -83,6 +76,7 @@ struct PaymentMonitorView: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("截图导入")
 
                         Button {
                             importMode = .text
@@ -95,6 +89,18 @@ struct PaymentMonitorView: View {
                             )
                         }
                         .buttonStyle(.plain)
+
+                        Button {
+                            importMode = .manual
+                        } label: {
+                            ImportActionTile(
+                                title: "手动导入",
+                                subtitle: "记一笔",
+                                systemImage: "plus.circle",
+                                isSelected: importMode == .manual
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     switch importMode {
@@ -102,6 +108,8 @@ struct PaymentMonitorView: View {
                         screenshotImportControls
                     case .text:
                         textImportControls
+                    case .manual:
+                        manualImportControls
                     }
                 }
             }
@@ -161,6 +169,25 @@ struct PaymentMonitorView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
+
+    private var manualImportControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SettingsInfoRow(
+                title: "手动补录",
+                systemImage: "plus.circle",
+                text: "适合没有截图或通知时直接录入金额、商户、分类、渠道和发生时间。"
+            )
+
+            Button {
+                sheetRoute = .manualEditor
+            } label: {
+                Label("打开手动导入", systemImage: "plus.circle.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityLabel("打开手动导入")
         }
     }
 
@@ -440,11 +467,31 @@ struct PaymentMonitorView: View {
         importSucceeded = false
         importMessage = ""
     }
+
+    private func presentManualImport() {
+        importMode = .manual
+        importSucceeded = false
+        importMessage = ""
+        sheetRoute = .manualEditor
+    }
 }
 
-enum ImportMode {
-    case screenshot
-    case text
+enum ImportMode: String, CaseIterable, Identifiable {
+    case screenshot = "截图导入"
+    case text = "文本解析"
+    case manual = "手动导入"
+
+    var id: String { rawValue }
+}
+
+private enum PaymentMonitorSheetRoute: Identifiable {
+    case manualEditor
+
+    var id: String {
+        switch self {
+        case .manualEditor: "manual-editor"
+        }
+    }
 }
 
 private enum ReviewScope: String, CaseIterable, Identifiable {

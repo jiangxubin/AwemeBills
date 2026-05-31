@@ -35,6 +35,20 @@
                ReferencedContainer = "container:AwemeBillingApp.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "000000000000000000000604"
+               BuildableName = "AwemeBillingUITests.xctest"
+               BlueprintName = "AwemeBillingUITests"
+               ReferencedContainer = "container:AwemeBillingApp.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -52,6 +66,17 @@
                BlueprintIdentifier = "000000000000000000000603"
                BuildableName = "AwemeBillingTests.xctest"
                BlueprintName = "AwemeBillingTests"
+               ReferencedContainer = "container:AwemeBillingApp.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "000000000000000000000604"
+               BuildableName = "AwemeBillingUITests.xctest"
+               BlueprintName = "AwemeBillingUITests"
                ReferencedContainer = "container:AwemeBillingApp.xcodeproj">
             </BuildableReference>
          </TestableReference>

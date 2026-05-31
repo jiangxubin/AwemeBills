@@ -57,6 +57,51 @@ final class AwemeBillingCoreTests: XCTestCase {
         XCTAssertEqual(payments.first?.category, .dining)
     }
 
+    func testPaymentTextParserFindsMerchantFromPaymentToPattern() throws {
+        let payments = PaymentTextParser.parseAll("微信支付凭证：已付款给 上海真如山姆会员店 ￥277.97")
+
+        let payment = try XCTUnwrap(payments.first)
+        XCTAssertEqual(payment.merchant, "上海真如山姆会员店")
+        XCTAssertEqual(payment.channel, .wechat)
+        XCTAssertEqual(payment.category, .shopping)
+        XCTAssertEqual((payment.amount as NSDecimalNumber).doubleValue, 277.97, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testAutomationTextImportAutoAcceptsHighConfidenceText() async throws {
+        let context = try makeInMemoryContext()
+
+        let summary = await AutomationTextImportService.importText(
+            "支付宝通知：你向咖啡店支付 38.50 元",
+            context: context,
+            refreshAfterAccept: false
+        )
+
+        XCTAssertEqual(summary.parsedCount, 1)
+        XCTAssertEqual(summary.acceptedCount, 1)
+        XCTAssertEqual(summary.pendingReviewCount, 0)
+
+        let records = try context.fetch(FetchDescriptor<ExpenseRecord>())
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.merchant, "咖啡店")
+    }
+
+    @MainActor
+    func testAutomationTextImportKeepsLowConfidenceTextForReview() async throws {
+        let context = try makeInMemoryContext()
+
+        let summary = await AutomationTextImportService.importText(
+            "支付提醒：你向未知商户支付 12.00 元",
+            context: context,
+            refreshAfterAccept: false
+        )
+
+        XCTAssertEqual(summary.parsedCount, 1)
+        XCTAssertEqual(summary.acceptedCount, 0)
+        XCTAssertEqual(summary.pendingReviewCount, 1)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<ExpenseRecord>()).isEmpty)
+    }
+
     func testOCRTextSelectionPrefersTencentResult() throws {
         let payments = ReceiptImageParser.parseOCRTexts(
             tencentText: "支付宝通知：你向腾讯识别商户支付 66.00 元",
@@ -142,6 +187,66 @@ final class AwemeBillingCoreTests: XCTestCase {
 
         let batch = try XCTUnwrap(try context.fetch(FetchDescriptor<ImportBatch>()).first)
         XCTAssertEqual(batch.status, .ignored)
+    }
+
+    @MainActor
+    func testManualExpenseImportCreatesRecord() async throws {
+        let context = try makeInMemoryContext()
+        let occurredAt = Date(timeIntervalSince1970: 1_769_184_000)
+        let draft = ManualExpenseDraft(
+            amount: 68.8,
+            merchant: "  手动咖啡店  ",
+            category: .dining,
+            scene: "",
+            channel: .wechat,
+            note: "手动补录",
+            occurredAt: occurredAt
+        )
+
+        let result = await ManualExpenseImportService.save(
+            draft: draft,
+            context: context,
+            refreshAfterSave: false
+        )
+
+        guard case .created(let record) = result else {
+            return XCTFail("Expected manual import to create a record")
+        }
+        XCTAssertEqual(record.merchant, "手动咖啡店")
+        XCTAssertEqual(record.scene, ExpenseCategory.dining.rawValue)
+        XCTAssertEqual(record.channel, .wechat)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<ExpenseRecord>()).count, 1)
+    }
+
+    @MainActor
+    func testManualExpenseImportRejectsDuplicateRecord() async throws {
+        let context = try makeInMemoryContext()
+        let occurredAt = Date(timeIntervalSince1970: 1_769_184_000)
+        let draft = ManualExpenseDraft(
+            amount: 68.8,
+            merchant: "手动咖啡店",
+            category: .dining,
+            scene: "早餐",
+            channel: .wechat,
+            note: "",
+            occurredAt: occurredAt
+        )
+
+        _ = await ManualExpenseImportService.save(
+            draft: draft,
+            context: context,
+            refreshAfterSave: false
+        )
+        let duplicate = await ManualExpenseImportService.save(
+            draft: draft,
+            context: context,
+            refreshAfterSave: false
+        )
+
+        guard case .duplicate = duplicate else {
+            return XCTFail("Expected duplicate manual import to be rejected")
+        }
+        XCTAssertEqual(try context.fetch(FetchDescriptor<ExpenseRecord>()).count, 1)
     }
 
     @MainActor

@@ -112,10 +112,10 @@ struct ArchiveScheduleView: View {
                     EmptyStateView(title: "暂无\(selectedPeriod.rawValue)消费总结", systemImage: "doc.text.magnifyingglass")
                 } else {
                     VStack(spacing: 0) {
-                        ForEach(visibleReports.indices, id: \.self) { index in
-                            ArchiveReportRow(report: visibleReports[index])
+                        ForEach(visibleReports) { report in
+                            ArchiveReportRow(report: report)
                                 .padding(.vertical, 12)
-                            if index < visibleReports.count - 1 {
+                            if let lastReport = visibleReports.last, report !== lastReport {
                                 Divider()
                             }
                         }

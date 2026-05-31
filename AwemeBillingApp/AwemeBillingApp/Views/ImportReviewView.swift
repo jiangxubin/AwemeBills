@@ -151,8 +151,6 @@ private struct ImportCandidateRow: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(statusColor.opacity(candidate.status == .pendingReview ? 0.22 : 0.10), lineWidth: 1)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(candidate.merchant)，\(BillingAnalytics.currency(candidate.amount))，\(candidate.statusRaw)")
     }
 
     private var amountText: Binding<String> {

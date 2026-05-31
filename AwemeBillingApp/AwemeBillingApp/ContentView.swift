@@ -11,10 +11,15 @@ struct ContentView: View {
     @State private var selectedTab: AppTab = .overview
     @State private var importMode: ImportMode = .screenshot
     @State private var reviewImportRouteID = UUID()
+    @State private var manualImportRequestID = UUID()
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            OverviewView()
+            OverviewView {
+                importMode = .manual
+                selectedTab = .importing
+                manualImportRequestID = UUID()
+            }
                 .tabItem {
                     Label("总览", systemImage: "chart.pie")
                 }
@@ -26,17 +31,15 @@ struct ContentView: View {
                 }
                 .tag(AppTab.details)
 
-            PaymentMonitorView(importMode: $importMode, reviewRouteID: reviewImportRouteID)
+            PaymentMonitorView(
+                importMode: $importMode,
+                reviewRouteID: reviewImportRouteID,
+                manualImportRequestID: manualImportRequestID
+            )
                 .tabItem {
                     Label("导入", systemImage: "square.and.arrow.down")
                 }
                 .tag(AppTab.importing)
-
-            ArchiveScheduleView()
-                .tabItem {
-                    Label("报告", systemImage: "doc.text.magnifyingglass")
-                }
-                .tag(AppTab.reports)
 
             ProfileSettingsView()
                 .tabItem {
@@ -145,6 +148,5 @@ private enum AppTab: Hashable {
     case overview
     case details
     case importing
-    case reports
     case profile
 }

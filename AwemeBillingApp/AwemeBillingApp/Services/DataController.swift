@@ -15,12 +15,18 @@ enum DataController {
             BudgetPlan.self
         ])
 
-        let configuration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            groupContainer: .identifier(appGroupIdentifier),
-            cloudKitDatabase: .none
-        )
+        let isUITesting = ProcessInfo.processInfo.arguments.contains("-ui-testing")
+        let configuration: ModelConfiguration
+        if isUITesting {
+            configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        } else {
+            configuration = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false,
+                groupContainer: .identifier(appGroupIdentifier),
+                cloudKitDatabase: .none
+            )
+        }
 
         do {
             return try ModelContainer(for: schema, configurations: [configuration])

@@ -67,6 +67,122 @@ struct RecordExpenseIntent: AppIntent {
     }
 }
 
+enum AutomationTextImportService {
+    struct Summary {
+        let parsedCount: Int
+        let acceptedCount: Int
+        let duplicateCount: Int
+        let pendingReviewCount: Int
+        let totalAmount: Decimal
+
+        var didParsePayments: Bool {
+            parsedCount > 0
+        }
+    }
+
+    private static let automaticAcceptThreshold = 0.84
+
+    @MainActor
+    static func importText(
+        _ rawText: String,
+        scene: String = "快捷指令自动化",
+        context: ModelContext,
+        refreshAfterAccept: Bool = true
+    ) async -> Summary {
+        let cleanText = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanText.isEmpty else {
+            return Summary(parsedCount: 0, acceptedCount: 0, duplicateCount: 0, pendingReviewCount: 0, totalAmount: .zero)
+        }
+
+        let payments = PaymentTextParser.parseAll(cleanText)
+        guard !payments.isEmpty else {
+            return Summary(parsedCount: 0, acceptedCount: 0, duplicateCount: 0, pendingReviewCount: 0, totalAmount: .zero)
+        }
+
+        let candidates = ImportPipeline.createBatch(
+            source: .shortcutURL,
+            rawText: cleanText,
+            payments: payments,
+            scene: scene,
+            context: context
+        )
+
+        var acceptedCount = 0
+        var duplicateCount = candidates.filter { $0.status == .duplicate }.count
+        var acceptedAmount = Decimal.zero
+
+        for candidate in candidates where candidate.status == .pendingReview {
+            guard candidate.confidence >= automaticAcceptThreshold else { continue }
+            if let record = ImportPipeline.accept(candidate, context: context) {
+                acceptedCount += 1
+                acceptedAmount += record.amount
+            } else {
+                duplicateCount += 1
+            }
+        }
+
+        try? context.save()
+
+        if acceptedCount > 0, refreshAfterAccept {
+            await ExpenseMutationService.refreshReportsAndNotifications(context: context)
+        }
+
+        let pendingReviewCount = candidates.filter { $0.status == .pendingReview }.count
+        return Summary(
+            parsedCount: payments.count,
+            acceptedCount: acceptedCount,
+            duplicateCount: duplicateCount,
+            pendingReviewCount: pendingReviewCount,
+            totalAmount: acceptedAmount
+        )
+    }
+}
+
+struct ImportExpenseTextIntent: AppIntent {
+    static var title: LocalizedStringResource = "自动记录消费文本"
+    static var description = IntentDescription("从短信、邮件、支付通知或快捷指令文本中识别消费，并自动写入消费管家。")
+    static var openAppWhenRun = false
+
+    @Parameter(title: "通知或账单文本", requestValueDialog: "请传入短信、邮件或支付通知文本。")
+    var text: String
+
+    @Parameter(title: "来源说明", default: "快捷指令自动化")
+    var scene: String
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("识别 \(\.$text) 并自动入账")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let context = ModelContext(DataController.sharedModelContainer)
+        let summary = await AutomationTextImportService.importText(text, scene: scene, context: context)
+
+        guard summary.didParsePayments else {
+            return .result(dialog: "未识别出有效消费。请确认短信或邮件里包含金额和商户信息。")
+        }
+
+        if summary.acceptedCount == 0, summary.pendingReviewCount == 0 {
+            return .result(dialog: "已识别 \(summary.parsedCount) 笔，但都已存在，未重复入账。")
+        }
+
+        let amountText = BillingAnalytics.currency(summary.totalAmount)
+        if summary.pendingReviewCount > 0 {
+            return .result(
+                dialog: "已自动入账 \(summary.acceptedCount) 笔，共 \(amountText)；另有 \(summary.pendingReviewCount) 笔需要在消费管家复核。"
+            )
+        }
+
+        if summary.duplicateCount > 0 {
+            return .result(
+                dialog: "已自动入账 \(summary.acceptedCount) 笔，共 \(amountText)，跳过 \(summary.duplicateCount) 笔重复记录。"
+            )
+        }
+
+        return .result(dialog: "已自动入账 \(summary.acceptedCount) 笔，共 \(amountText)。")
+    }
+}
+
 struct AwemeBillingShortcutsProvider: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
@@ -78,6 +194,17 @@ struct AwemeBillingShortcutsProvider: AppShortcutsProvider {
             ],
             shortTitle: "记录消费",
             systemImageName: "yensign.circle.fill"
+        )
+
+        AppShortcut(
+            intent: ImportExpenseTextIntent(),
+            phrases: [
+                "用\(.applicationName)自动记录消费通知",
+                "让\(.applicationName)识别消费短信",
+                "让\(.applicationName)导入消费邮件"
+            ],
+            shortTitle: "自动入账",
+            systemImageName: "text.badge.checkmark"
         )
 
         AppShortcut(

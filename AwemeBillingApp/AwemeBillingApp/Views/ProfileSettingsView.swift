@@ -40,6 +40,40 @@ struct ProfileSettingsView: View {
                 }
 
                 Section("通用设置") {
+                    DisclosureGroup {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("推荐用短信或邮件作为触发源：银行、信用卡、支付宝账单邮件、微信支付账单邮件都可以。快捷指令收到后，把正文传给“消费管家 - 自动记录消费文本”。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            SettingsInfoRow(
+                                title: "短信自动化",
+                                systemImage: "message.fill",
+                                text: "快捷指令 > 自动化 > 收到信息；发件人填银行或支付服务号，内容包含“消费、支出、付款、交易”等关键词。"
+                            )
+
+                            SettingsInfoRow(
+                                title: "邮件自动化",
+                                systemImage: "envelope.fill",
+                                text: "快捷指令 > 自动化 > 收到邮件；按发件人或主题筛选账单邮件，再把邮件正文传给消费管家。"
+                            )
+
+                            SettingsInfoRow(
+                                title: "自动入账规则",
+                                systemImage: "checkmark.seal.fill",
+                                text: "能明确识别金额、商户和分类的记录会直接入账；低置信度记录会留在导入复核里。"
+                            )
+                        }
+                        .padding(.vertical, 4)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("支付通知自动入账")
+                            Text("短信 / 邮件 / 快捷指令")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
                     SettingsInfoRow(
                         title: "截图识别",
                         systemImage: "text.viewfinder",

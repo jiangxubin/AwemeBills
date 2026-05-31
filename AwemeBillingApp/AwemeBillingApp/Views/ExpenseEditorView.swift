@@ -5,6 +5,7 @@ struct ExpenseEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     private let editingRecord: ExpenseRecord?
+    private let onSaved: (() -> Void)?
 
     @State private var amount = ""
     @State private var merchant = ""
@@ -19,8 +20,9 @@ struct ExpenseEditorView: View {
         Decimal(string: amount.replacingOccurrences(of: ",", with: ""))
     }
 
-    init(record: ExpenseRecord? = nil) {
+    init(record: ExpenseRecord? = nil, onSaved: (() -> Void)? = nil) {
         self.editingRecord = record
+        self.onSaved = onSaved
         _amount = State(initialValue: record.map { NSDecimalNumber(decimal: $0.amount).stringValue } ?? "")
         _merchant = State(initialValue: record?.merchant ?? "")
         _category = State(initialValue: record?.category ?? .dining)
@@ -87,52 +89,24 @@ struct ExpenseEditorView: View {
 
     @MainActor
     private func save() async {
-        guard let parsedAmount else { return }
-        let trimmedMerchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        let payment = ParsedPayment(
+        let draft = ManualExpenseDraft(
             amount: parsedAmount,
-            merchant: trimmedMerchant,
-            channel: channel,
-            note: note,
-            occurredAt: occurredAt,
-            category: category
-        )
-        let existingRecords = ((try? modelContext.fetch(FetchDescriptor<ExpenseRecord>())) ?? [])
-            .filter { $0 !== editingRecord }
-
-        guard ExpenseRecordMaintenance.uniquePayments([payment], existing: existingRecords).first != nil else {
-            saveMessage = "这笔消费已经存在，未重复保存。"
-            return
-        }
-
-        if let editingRecord {
-            editingRecord.amount = parsedAmount
-            editingRecord.merchant = trimmedMerchant
-            editingRecord.category = category
-            editingRecord.scene = scene.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? category.rawValue : scene
-            editingRecord.channel = channel
-            editingRecord.note = note
-            editingRecord.occurredAt = occurredAt
-            PaymentRuleEngine.learnRule(from: editingRecord, context: modelContext)
-            try? modelContext.save()
-            await ExpenseMutationService.refreshReportsAndNotifications(context: modelContext)
-            dismiss()
-            return
-        }
-
-        let record = ExpenseRecord(
-            amount: parsedAmount,
-            merchant: trimmedMerchant,
+            merchant: merchant,
             category: category,
-            scene: scene.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? category.rawValue : scene,
+            scene: scene,
             channel: channel,
             note: note,
             occurredAt: occurredAt
         )
-        modelContext.insert(record)
-        PaymentRuleEngine.learnRule(from: record, context: modelContext)
-        try? modelContext.save()
-        await ExpenseMutationService.refreshReportsAndNotifications(context: modelContext)
-        dismiss()
+
+        switch await ManualExpenseImportService.save(draft: draft, editingRecord: editingRecord, context: modelContext) {
+        case .created, .updated:
+            onSaved?()
+            dismiss()
+        case .duplicate:
+            saveMessage = "这笔消费已经存在，未重复保存。"
+        case .invalid:
+            saveMessage = "请补全金额和商户后再保存。"
+        }
     }
 }

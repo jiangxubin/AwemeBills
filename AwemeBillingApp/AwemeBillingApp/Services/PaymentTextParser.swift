@@ -157,6 +157,18 @@ enum PaymentTextParser {
             return merchant
         }
 
+        let merchantPatterns = [
+            #"向\s*([^，,。；;\n\r]+?)\s*(?:支付|付款|转账|消费)"#,
+            #"(?:付款给|支付给|转账给|给)\s*([^，,。；;\n\r]+?)(?:\s*[¥￥]?\s*[0-9,]+(?:\.[0-9]{1,2})?|\s*(?:支付|付款|转账|消费)|$)"#,
+            #"收款方[:：\s]*([^，,。；;\n\r]+)"#,
+            #"商户[:：\s]*([^，,。；;\n\r]+)"#
+        ]
+        for pattern in merchantPatterns {
+            if let merchant = firstCapturedText(pattern: pattern, in: text) {
+                return cleanedNotificationMerchant(merchant)
+            }
+        }
+
         let markers = ["向", "在", "商户", "收款方"]
         for marker in markers {
             guard let markerRange = text.range(of: marker) else { continue }
@@ -167,6 +179,24 @@ enum PaymentTextParser {
             }
         }
         return channel.rawValue
+    }
+
+    private static func firstCapturedText(pattern: String, in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range(at: 1), in: text)
+        else { return nil }
+        let value = String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+
+    private static func cleanedNotificationMerchant(_ merchant: String) -> String {
+        merchant
+            .replacingOccurrences(of: "支付", with: "")
+            .replacingOccurrences(of: "付款", with: "")
+            .replacingOccurrences(of: "转账", with: "")
+            .replacingOccurrences(of: "消费", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func category(in text: String) -> ExpenseCategory {
