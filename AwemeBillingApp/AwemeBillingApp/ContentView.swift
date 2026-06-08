@@ -5,6 +5,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \ArchiveSchedule.periodRaw) private var schedules: [ArchiveSchedule]
+    @Query(sort: \ExpenseCategoryProfile.sortOrder) private var categoryProfiles: [ExpenseCategoryProfile]
     @Query private var expenses: [ExpenseRecord]
     @Query private var reports: [ArchiveReport]
     @AppStorage("appearanceMode") private var appearanceMode = "system"
@@ -12,6 +13,7 @@ struct ContentView: View {
     @State private var importMode: ImportMode = .screenshot
     @State private var reviewImportRouteID = UUID()
     @State private var manualImportRequestID = UUID()
+    @State private var didSeedUITestRecords = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -74,6 +76,8 @@ struct ContentView: View {
     }
 
     private func refreshArchivesAndNotifications(requestAuthorizationIfNeeded: Bool) async {
+        seedUITestRecordsIfNeeded()
+        ExpenseCategoryCatalog.ensureDefaults(profiles: categoryProfiles, context: modelContext)
         let allSchedules = ensureDefaultSchedules()
         let cleanup = ExpenseRecordMaintenance.cleanup(records: expenses, context: modelContext)
         let currentRecords = (try? modelContext.fetch(FetchDescriptor<ExpenseRecord>())) ?? expenses
@@ -116,6 +120,20 @@ struct ContentView: View {
         } catch {
             print("Failed to schedule archive notifications: \(error)")
         }
+    }
+
+    private func seedUITestRecordsIfNeeded() {
+        guard !didSeedUITestRecords,
+              ProcessInfo.processInfo.arguments.contains("-ui-testing-with-samples")
+        else { return }
+        didSeedUITestRecords = true
+
+        let existingRecords = (try? modelContext.fetch(FetchDescriptor<ExpenseRecord>())) ?? []
+        guard existingRecords.isEmpty else { return }
+        for record in SampleData.records {
+            modelContext.insert(record)
+        }
+        try? modelContext.save()
     }
 
     private var preferredColorScheme: ColorScheme? {

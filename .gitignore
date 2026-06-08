@@ -45,6 +45,8 @@ __pycache__/
 OCR_iOS_SDK_v*/
 
 # Local simulator/debug screenshots
+AwemeBillingApp/*.png
+AwemeBillingApp/*.PNG
 simulator-*.png
 *-launch.png
 ui-redesign-*.png

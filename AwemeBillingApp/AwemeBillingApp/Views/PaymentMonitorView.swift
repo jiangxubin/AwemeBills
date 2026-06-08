@@ -17,8 +17,11 @@ struct PaymentMonitorView: View {
     @State private var reviewScope: ReviewScope = .allPending
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var selectedImage: UIImage?
+    @State private var selectedScreenshotChannel: PaymentChannel?
+    @State private var isPhotoPickerPresented = false
     @State private var isParsingImage = false
     @State private var sheetRoute: PaymentMonitorSheetRoute?
+    @State private var handledManualImportRequestID: UUID?
 
     private let importColumns = [
         GridItem(.flexible(), spacing: 10),
@@ -40,6 +43,9 @@ struct PaymentMonitorView: View {
             .background(AppTheme.background)
             .navigationTitle("导入")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                openManualImportIfRequested()
+            }
             .onChange(of: selectedPhoto) { _, newValue in
                 Task { await loadImage(from: newValue) }
             }
@@ -47,8 +53,9 @@ struct PaymentMonitorView: View {
                 focusReviewQueue()
             }
             .onChange(of: manualImportRequestID) { _, _ in
-                presentManualImport()
+                openManualImportIfRequested()
             }
+            .photosPicker(isPresented: $isPhotoPickerPresented, selection: $selectedPhoto, matching: .images)
             .sheet(item: $sheetRoute) { route in
                 switch route {
                 case .manualEditor:
@@ -56,6 +63,11 @@ struct PaymentMonitorView: View {
                         importSucceeded = true
                         importMessage = "手动消费已入账。"
                     }
+                case .screenshotSourcePicker:
+                    ScreenshotSourcePickerSheet(selectedChannel: selectedScreenshotChannel) { channel in
+                        chooseScreenshotSource(channel)
+                    }
+                    .presentationDetents([.medium])
                 }
             }
         }
@@ -67,10 +79,13 @@ struct PaymentMonitorView: View {
             AppCard {
                 VStack(alignment: .leading, spacing: 16) {
                     LazyVGrid(columns: importColumns, spacing: 10) {
-                        PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                        Button {
+                            importMode = .screenshot
+                            sheetRoute = .screenshotSourcePicker
+                        } label: {
                             ImportActionTile(
                                 title: selectedImage == nil ? "截图导入" : "更换截图",
-                                subtitle: selectedImage == nil ? "从相册选择" : "已载入",
+                                subtitle: selectedScreenshotChannel?.rawValue ?? "先选来源",
                                 systemImage: "photo.on.rectangle",
                                 isSelected: importMode == .screenshot
                             )
@@ -89,6 +104,7 @@ struct PaymentMonitorView: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("文本解析")
 
                         Button {
                             importMode = .manual
@@ -101,6 +117,7 @@ struct PaymentMonitorView: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("手动导入")
                     }
 
                     switch importMode {
@@ -119,6 +136,21 @@ struct PaymentMonitorView: View {
     private var screenshotImportControls: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let selectedImage {
+                HStack(spacing: 8) {
+                    Label("来源：\(selectedScreenshotChannel?.rawValue ?? "自动识别")", systemImage: "square.and.arrow.down")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Button("重选来源") {
+                        sheetRoute = .screenshotSourcePicker
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AppTheme.accent)
+                }
+
                 Image(uiImage: selectedImage)
                     .resizable()
                     .scaledToFit()
@@ -135,7 +167,27 @@ struct PaymentMonitorView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(isParsingImage)
             } else {
-                EmptyStateView(title: "选择一张账单截图后开始解析", systemImage: "photo.on.rectangle")
+                EmptyStateView(title: "选择来源后，再从相册导入账单截图", systemImage: "photo.on.rectangle")
+
+                HStack(spacing: 10) {
+                    Button {
+                        sheetRoute = .screenshotSourcePicker
+                    } label: {
+                        Label(selectedScreenshotChannel?.rawValue ?? "选择来源", systemImage: "square.and.arrow.down")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("选择截图来源")
+
+                    Button {
+                        isPhotoPickerPresented = true
+                    } label: {
+                        Label("选择照片", systemImage: "photo")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityLabel("选择照片")
+                }
             }
         }
     }
@@ -359,7 +411,10 @@ struct PaymentMonitorView: View {
         defer { isParsingImage = false }
 
         do {
-            let payments = try await ReceiptImageParser.parseAll(image: image)
+            let payments = try await ReceiptImageParser.parseAll(
+                image: image,
+                preferredChannel: selectedScreenshotChannel
+            )
             guard !payments.isEmpty else {
                 importSucceeded = false
                 importMessage = "未识别出有效消费，请粘贴通知文本或手动记一笔。"
@@ -371,11 +426,12 @@ struct PaymentMonitorView: View {
                 source: .screenshot,
                 rawText: rawText,
                 payments: payments,
-                scene: "截图解析",
+                scene: selectedScreenshotChannel.map { "\($0.rawValue)截图解析" } ?? "截图解析",
                 context: modelContext
             )
             selectedImage = nil
             selectedPhoto = nil
+            selectedScreenshotChannel = nil
             let pending = newCandidates.filter { $0.status == .pendingReview }
             lastBatchID = newCandidates.first?.batchID
             reviewScope = pending.isEmpty ? .allPending : .currentBatch
@@ -445,12 +501,20 @@ struct PaymentMonitorView: View {
                 lastBatchID = nil
                 reviewScope = .allPending
                 importSucceeded = false
-                importMessage = "截图已载入，可以开始解析。"
+                let source = selectedScreenshotChannel?.rawValue ?? "自动识别"
+                importMessage = "\(source)截图已载入，可以开始解析。"
             }
         } catch {
             importSucceeded = false
             importMessage = "读取图片失败，请换一张截图再试。"
         }
+    }
+
+    private func chooseScreenshotSource(_ channel: PaymentChannel?) {
+        selectedScreenshotChannel = channel
+        sheetRoute = nil
+        importSucceeded = false
+        importMessage = "\(channel?.rawValue ?? "自动识别")已选，点击选择照片后导入截图。"
     }
 
     private func clearCompletedReview(for batchID: String?) {
@@ -474,6 +538,15 @@ struct PaymentMonitorView: View {
         importMessage = ""
         sheetRoute = .manualEditor
     }
+
+    private func openManualImportIfRequested() {
+        guard importMode == .manual,
+              handledManualImportRequestID != manualImportRequestID else {
+            return
+        }
+        handledManualImportRequestID = manualImportRequestID
+        presentManualImport()
+    }
 }
 
 enum ImportMode: String, CaseIterable, Identifiable {
@@ -486,10 +559,12 @@ enum ImportMode: String, CaseIterable, Identifiable {
 
 private enum PaymentMonitorSheetRoute: Identifiable {
     case manualEditor
+    case screenshotSourcePicker
 
     var id: String {
         switch self {
         case .manualEditor: "manual-editor"
+        case .screenshotSourcePicker: "screenshot-source-picker"
         }
     }
 }
@@ -534,4 +609,80 @@ private struct ImportActionTile: View {
                 .stroke(isSelected ? AppTheme.accent.opacity(0.55) : Color.clear, lineWidth: 1)
         }
     }
+}
+
+private struct ScreenshotSourcePickerSheet: View {
+    let selectedChannel: PaymentChannel?
+    let onChoose: (PaymentChannel?) -> Void
+
+    private let options: [ScreenshotSourceOption] = [
+        ScreenshotSourceOption(title: "不选择", subtitle: "自动判断支付渠道", channel: nil, systemImage: "sparkles"),
+        ScreenshotSourceOption(title: "微信", subtitle: "微信支付账单截图", channel: .wechat, systemImage: "message.circle"),
+        ScreenshotSourceOption(title: "支付宝", subtitle: "支付宝账单截图", channel: .alipay, systemImage: "a.circle"),
+        ScreenshotSourceOption(title: "云闪付", subtitle: "银联云闪付账单", channel: .unionPay, systemImage: "creditcard"),
+        ScreenshotSourceOption(title: "银行卡", subtitle: "银行或信用卡通知", channel: .bankCard, systemImage: "building.columns")
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("选择截图来源")
+                        .font(.title3.weight(.bold))
+
+                    Text("来源可以帮助识别器理解页面样式；不确定时可以不选择。")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    VStack(spacing: 8) {
+                        ForEach(options) { option in
+                            Button {
+                                onChoose(option.channel)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: option.systemImage)
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(AppTheme.accent)
+                                        .frame(width: 28)
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(option.title)
+                                            .font(.headline)
+                                            .foregroundStyle(.primary)
+                                        Text(option.subtitle)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    if selectedChannel == option.channel {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(AppTheme.accent)
+                                    }
+                                }
+                                .padding(14)
+                                .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("选择\(option.title)")
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+                .padding(18)
+            }
+            .background(AppTheme.background)
+            .navigationTitle("截图来源")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+private struct ScreenshotSourceOption: Identifiable {
+    let id = UUID()
+    let title: String
+    let subtitle: String
+    let channel: PaymentChannel?
+    let systemImage: String
 }

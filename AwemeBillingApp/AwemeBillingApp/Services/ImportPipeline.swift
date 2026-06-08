@@ -12,12 +12,13 @@ enum ImportPipeline {
     ) -> [ParsedPaymentCandidate] {
         let rules = (try? context.fetch(FetchDescriptor<PaymentRule>())) ?? []
         let records = (try? context.fetch(FetchDescriptor<ExpenseRecord>())) ?? []
+        let categoryProfiles = (try? context.fetch(FetchDescriptor<ExpenseCategoryProfile>())) ?? []
         var seenRecordKeys = Set(records.map {
             ExpenseRecordMaintenance.deduplicationKey(
                 amount: $0.amount,
                 merchant: $0.merchant,
-                category: $0.category,
-                channel: $0.channel,
+                categoryRaw: $0.categoryRaw,
+                channelRaw: $0.channelRaw,
                 occurredAt: $0.occurredAt
             )
         })
@@ -36,13 +37,21 @@ enum ImportPipeline {
 
         for payment in payments {
             let (ruledPayment, ruledScene, confidence) = PaymentRuleEngine.applyRules(to: payment, rules: rules)
-            let fingerprint = ImportFingerprint.candidate(payment: ruledPayment, rawText: ruledPayment.note.isEmpty ? rawText : ruledPayment.note)
+            let resolvedPayment = ExpenseCategoryCatalog.userFacingPayment(
+                ruledPayment,
+                profiles: categoryProfiles
+            )
+            let resolvedScene = ExpenseCategoryCatalog.displayName(
+                forSemanticRawName: ruledScene,
+                in: categoryProfiles
+            )
+            let fingerprint = ImportFingerprint.candidate(payment: resolvedPayment, rawText: resolvedPayment.note.isEmpty ? rawText : resolvedPayment.note)
             let recordKey = ExpenseRecordMaintenance.deduplicationKey(
-                amount: ruledPayment.amount,
-                merchant: ruledPayment.merchant,
-                category: ruledPayment.category,
-                channel: ruledPayment.channel,
-                occurredAt: ruledPayment.occurredAt ?? importDate
+                amount: resolvedPayment.amount,
+                merchant: resolvedPayment.merchant,
+                categoryRaw: resolvedPayment.categoryRaw,
+                channelRaw: resolvedPayment.channel.rawValue,
+                occurredAt: resolvedPayment.occurredAt ?? importDate
             )
             let isDuplicate = seenRecordKeys.contains(recordKey) || seenFingerprints.contains(fingerprint)
             let status: ParsedPaymentCandidateStatus = isDuplicate ? .duplicate : .pendingReview
@@ -56,8 +65,8 @@ enum ImportPipeline {
 
             let candidate = ParsedPaymentCandidate(
                 batchID: batch.idString,
-                payment: ruledPayment,
-                scene: scene.isEmpty ? ruledScene : scene,
+                payment: resolvedPayment,
+                scene: scene.isEmpty ? resolvedScene : scene,
                 rawText: rawText,
                 sourceFingerprint: fingerprint,
                 confidence: confidence,
@@ -78,7 +87,24 @@ enum ImportPipeline {
         guard candidate.status == .pendingReview else { return nil }
 
         let existingRecords = (try? context.fetch(FetchDescriptor<ExpenseRecord>())) ?? []
-        guard ExpenseRecordMaintenance.uniquePayments([candidate.payment], existing: existingRecords).first != nil else {
+        let candidateKey = ExpenseRecordMaintenance.deduplicationKey(
+            amount: candidate.amount,
+            merchant: candidate.merchant,
+            categoryRaw: candidate.categoryRaw,
+            channelRaw: candidate.channelRaw,
+            occurredAt: candidate.occurredAt ?? .now
+        )
+        let existingKeys = Set(existingRecords.map {
+            ExpenseRecordMaintenance.deduplicationKey(
+                amount: $0.amount,
+                merchant: $0.merchant,
+                categoryRaw: $0.categoryRaw,
+                channelRaw: $0.channelRaw,
+                occurredAt: $0.occurredAt
+            )
+        })
+
+        guard !existingKeys.contains(candidateKey) else {
             candidate.status = .duplicate
             updateBatch(for: candidate, context: context)
             return nil
@@ -87,10 +113,11 @@ enum ImportPipeline {
         let record = ExpenseRecord(
             amount: candidate.amount,
             merchant: candidate.merchant.trimmingCharacters(in: .whitespacesAndNewlines),
-            category: candidate.category,
-            scene: candidate.scene.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? candidate.category.rawValue : candidate.scene,
+            categoryRaw: candidate.categoryRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? ExpenseCategory.other.rawValue : candidate.categoryRaw,
+            scene: candidate.scene.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? candidate.categoryRaw : candidate.scene,
             channel: candidate.channel,
             note: candidate.note,
+            merchantLogoPNGData: candidate.merchantLogoPNGData,
             occurredAt: candidate.occurredAt ?? .now,
             isArchived: true
         )

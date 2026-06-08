@@ -7,28 +7,84 @@ struct ParsedPayment {
     let note: String
     let occurredAt: Date?
     let category: ExpenseCategory
+    let categoryRaw: String
+    let merchantLogoPNGData: Data?
+
+    init(
+        amount: Decimal,
+        merchant: String,
+        channel: PaymentChannel,
+        note: String,
+        occurredAt: Date?,
+        category: ExpenseCategory,
+        categoryRaw: String? = nil,
+        merchantLogoPNGData: Data? = nil
+    ) {
+        self.amount = amount
+        self.merchant = merchant
+        self.channel = channel
+        self.note = note
+        self.occurredAt = occurredAt
+        self.category = category
+        self.categoryRaw = categoryRaw?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? category.rawValue
+        self.merchantLogoPNGData = merchantLogoPNGData
+    }
+
+    func withMerchantLogoPNGData(_ data: Data?) -> ParsedPayment {
+        ParsedPayment(
+            amount: amount,
+            merchant: merchant,
+            channel: channel,
+            note: note,
+            occurredAt: occurredAt,
+            category: category,
+            categoryRaw: categoryRaw,
+            merchantLogoPNGData: data ?? merchantLogoPNGData
+        )
+    }
 }
 
 enum PaymentTextParser {
-    static func parseAll(_ text: String) -> [ParsedPayment] {
-        let listPayments = parseBillList(text)
+    static func parseAll(
+        _ text: String,
+        preferredChannel: PaymentChannel? = nil,
+        referenceDate: Date = .now
+    ) -> [ParsedPayment] {
+        let structuredPayments = PaymentStructuredPayloadParser.parse(
+            text: text,
+            preferredChannel: preferredChannel,
+            referenceDate: referenceDate
+        )
+        if !structuredPayments.isEmpty {
+            return structuredPayments
+        }
+
+        let listPayments = parseBillList(
+            text,
+            preferredChannel: preferredChannel,
+            referenceDate: referenceDate
+        )
         if !listPayments.isEmpty {
             return listPayments
         }
 
-        return parse(text).map { [$0] } ?? []
+        return parse(text, preferredChannel: preferredChannel, referenceDate: referenceDate).map { [$0] } ?? []
     }
 
-    static func parse(_ text: String) -> ParsedPayment? {
+    static func parse(
+        _ text: String,
+        preferredChannel: PaymentChannel? = nil,
+        referenceDate: Date = .now
+    ) -> ParsedPayment? {
         guard let amount = firstAmount(in: text) else { return nil }
-        let channel = channel(in: text)
+        let channel = channel(in: text, preferredChannel: preferredChannel)
         let merchant = merchant(in: text, channel: channel)
         return ParsedPayment(
             amount: amount,
             merchant: merchant,
             channel: channel,
             note: text,
-            occurredAt: occurredAt(in: text),
+            occurredAt: occurredAt(in: text) ?? billDate(from: text, now: referenceDate),
             category: category(in: text)
         )
     }
@@ -39,19 +95,35 @@ enum PaymentTextParser {
         let originalText: String
     }
 
-    private static func parseBillList(_ text: String) -> [ParsedPayment] {
+    private static func parseBillList(
+        _ text: String,
+        preferredChannel: PaymentChannel?,
+        referenceDate: Date
+    ) -> [ParsedPayment] {
+        let channel = billListChannel(in: text, preferredChannel: preferredChannel)
+        switch channel {
+        case .alipay:
+            return AlipayBillListParser.parse(text, referenceDate: referenceDate)
+        case .wechat:
+            return WeChatBillListParser.parse(text, referenceDate: referenceDate)
+        default:
+            return GenericBillListParser.parse(text, channel: channel, referenceDate: referenceDate)
+        }
+    }
+
+    private static func parseGenericBillList(
+        _ text: String,
+        channel: PaymentChannel,
+        referenceDate: Date,
+        categoryResolver: (_ merchant: String, _ categoryText: String, _ amountLine: BillAmountLine) -> (category: ExpenseCategory, categoryRaw: String?)
+    ) -> [ParsedPayment] {
         guard looksLikeBillList(text) else {
             return []
         }
 
-        let lines = text
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
+        let lines = normalizedBillLines(from: text)
         var payments: [ParsedPayment] = []
         var previousAmountIndex = -1
-        let channel = billListChannel(in: text)
 
         for index in lines.indices {
             guard let amountLine = billAmountLine(
@@ -70,9 +142,20 @@ enum PaymentTextParser {
                 continue
             }
 
-            let categoryText = categoryNearAmount(lines, amountIndex: index, lowerBound: lowerBound) ?? ""
-            let timeLine = timeLineNearAmount(lines, amountIndex: index, lowerBound: lowerBound)
-            let context = [merchant, categoryText, amountLine.isIncome ? "收入 退款" : ""].joined(separator: " ")
+            let upperBound = nextAmountIndex(in: lines, after: index) ?? lines.count
+            let categoryText = categoryNearAmount(
+                lines,
+                amountIndex: index,
+                lowerBound: lowerBound,
+                upperBound: upperBound
+            ) ?? ""
+            let timeLine = timeLineNearAmount(
+                lines,
+                amountIndex: index,
+                lowerBound: lowerBound,
+                upperBound: upperBound
+            )
+            let resolvedCategory = categoryResolver(merchant, categoryText, amountLine)
             payments.append(
                 ParsedPayment(
                     amount: amountLine.amount,
@@ -81,14 +164,49 @@ enum PaymentTextParser {
                     note: [merchant, categoryText, timeLine ?? "", amountLine.originalText]
                         .filter { !$0.isEmpty }
                         .joined(separator: "\n"),
-                    occurredAt: timeLine.flatMap { billDate(from: $0) },
-                    category: category(in: context)
+                    occurredAt: timeLine.flatMap { billDate(from: $0, now: referenceDate) },
+                    category: resolvedCategory.category,
+                    categoryRaw: resolvedCategory.categoryRaw
                 )
             )
             previousAmountIndex = index
         }
 
         return payments
+    }
+
+    private enum GenericBillListParser {
+        static func parse(
+            _ text: String,
+            channel: PaymentChannel,
+            referenceDate: Date
+        ) -> [ParsedPayment] {
+            parseGenericBillList(text, channel: channel, referenceDate: referenceDate) { merchant, categoryText, amountLine in
+                let context = [merchant, categoryText, amountLine.isIncome ? "收入 退款" : ""].joined(separator: " ")
+                return (category(in: context), nil)
+            }
+        }
+    }
+
+    private enum AlipayBillListParser {
+        static func parse(_ text: String, referenceDate: Date) -> [ParsedPayment] {
+            parseGenericBillList(text, channel: .alipay, referenceDate: referenceDate) { merchant, categoryText, amountLine in
+                if let mapped = PaymentPlatformCategoryMapper.category(from: categoryText) {
+                    return (mapped.category, mapped.raw)
+                }
+                let context = [merchant, categoryText, amountLine.isIncome ? "收入 退款" : ""].joined(separator: " ")
+                return (category(in: context), nil)
+            }
+        }
+    }
+
+    private enum WeChatBillListParser {
+        static func parse(_ text: String, referenceDate: Date) -> [ParsedPayment] {
+            parseGenericBillList(text, channel: .wechat, referenceDate: referenceDate) { merchant, categoryText, amountLine in
+                let context = [merchant, categoryText, amountLine.isIncome ? "收入 退款 群收款" : ""].joined(separator: " ")
+                return (category(in: context), nil)
+            }
+        }
     }
 
     private static func looksLikeBillList(_ text: String) -> Bool {
@@ -102,6 +220,13 @@ enum PaymentTextParser {
         let signedAmountMatches = matches(pattern: #"(?m)^[+＋\-−]\s*[¥￥]?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*$"#, in: text)
         let timeMatches = matches(pattern: #"(今天|昨天|\d{1,2}月\d{1,2}日|\d{1,2}-\d{1,2})\s+\d{1,2}:\d{2}"#, in: text)
         return signedAmountMatches.count >= 2 && timeMatches.count >= 2
+    }
+
+    private static func normalizedBillLines(from text: String) -> [String] {
+        text
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     private static func firstAmount(in text: String) -> Decimal? {
@@ -136,7 +261,10 @@ enum PaymentTextParser {
         return Decimal(string: String(text[range]).replacingOccurrences(of: ",", with: ""))
     }
 
-    private static func channel(in text: String) -> PaymentChannel {
+    fileprivate static func channel(in text: String, preferredChannel: PaymentChannel? = nil) -> PaymentChannel {
+        if let preferredChannel {
+            return preferredChannel
+        }
         if text.contains("支付宝") { return .alipay }
         if text.contains("余额宝") || text.contains("收支分析") || text.contains("搜索交易记录") { return .alipay }
         if text.contains("微信") { return .wechat }
@@ -145,7 +273,10 @@ enum PaymentTextParser {
         return .other
     }
 
-    private static func billListChannel(in text: String) -> PaymentChannel {
+    private static func billListChannel(in text: String, preferredChannel: PaymentChannel?) -> PaymentChannel {
+        if let preferredChannel {
+            return preferredChannel
+        }
         if text.contains("全部账单") || text.contains("查找交易") || text.contains("收支统计") {
             return .wechat
         }
@@ -215,7 +346,8 @@ enum PaymentTextParser {
 
         guard let amount = unsignedBillAmount(from: line) else { return nil }
         let searchStart = max(lowerBound, amountIndex - 5)
-        let nearbyText = (searchStart...amountIndex)
+        let searchEnd = min(lines.count - 1, amountIndex + 2)
+        let nearbyText = (searchStart...searchEnd)
             .map { lines[$0] }
             .joined(separator: " ")
 
@@ -248,6 +380,11 @@ enum PaymentTextParser {
 
     private static func isBillAmountBoundaryLine(_ line: String) -> Bool {
         line.range(of: #"^[+＋\-−]?\s*[¥￥]?\s*[0-9,]+(?:\.[0-9]{1,2})$"#, options: .regularExpression) != nil
+    }
+
+    private static func nextAmountIndex(in lines: [String], after amountIndex: Int) -> Int? {
+        guard amountIndex + 1 < lines.count else { return nil }
+        return ((amountIndex + 1)..<lines.count).first { isBillAmountBoundaryLine(lines[$0]) }
     }
 
     private static func isBillTimeLine(_ line: String) -> Bool {
@@ -291,21 +428,68 @@ enum PaymentTextParser {
     private static func categoryNearAmount(
         _ lines: [String],
         amountIndex: Int,
-        lowerBound: Int
+        lowerBound: Int,
+        upperBound: Int
     ) -> String? {
+        if usesForwardMetadataSearch(lines, amountIndex: amountIndex) {
+            return forwardCategoryNearAmount(lines, amountIndex: amountIndex, upperBound: upperBound)
+        }
+
         let searchStart = max(lowerBound, amountIndex - 4)
-        return stride(from: amountIndex - 1, through: searchStart, by: -1)
+        let previousCategoryIndex = stride(from: amountIndex - 1, through: searchStart, by: -1)
             .first { isStandaloneBillCategoryLine(lines[$0]) }
-            .map { lines[$0] }
+        if let previousCategoryIndex {
+            return lines[previousCategoryIndex]
+        }
+
+        return forwardCategoryNearAmount(lines, amountIndex: amountIndex, upperBound: upperBound)
     }
 
     private static func timeLineNearAmount(
         _ lines: [String],
         amountIndex: Int,
-        lowerBound: Int
+        lowerBound: Int,
+        upperBound: Int
     ) -> String? {
+        if usesForwardMetadataSearch(lines, amountIndex: amountIndex) {
+            return forwardTimeLineNearAmount(lines, amountIndex: amountIndex, upperBound: upperBound)
+        }
+
         let searchStart = max(lowerBound, amountIndex - 4)
-        return stride(from: amountIndex - 1, through: searchStart, by: -1)
+        let previousTimeIndex = stride(from: amountIndex - 1, through: searchStart, by: -1)
+            .first { isBillTimeLine(lines[$0]) }
+        if let previousTimeIndex {
+            return lines[previousTimeIndex]
+        }
+
+        return forwardTimeLineNearAmount(lines, amountIndex: amountIndex, upperBound: upperBound)
+    }
+
+    private static func usesForwardMetadataSearch(_ lines: [String], amountIndex: Int) -> Bool {
+        guard amountIndex > 0 else { return false }
+        return isBillMerchantCandidate(cleanedBillMerchant(lines[amountIndex - 1]))
+    }
+
+    private static func forwardCategoryNearAmount(
+        _ lines: [String],
+        amountIndex: Int,
+        upperBound: Int
+    ) -> String? {
+        guard amountIndex + 1 < upperBound else { return nil }
+        let searchEnd = min(upperBound - 1, amountIndex + 5)
+        return ((amountIndex + 1)...searchEnd)
+            .first { isStandaloneBillCategoryLine(lines[$0]) }
+            .map { lines[$0] }
+    }
+
+    private static func forwardTimeLineNearAmount(
+        _ lines: [String],
+        amountIndex: Int,
+        upperBound: Int
+    ) -> String? {
+        guard amountIndex + 1 < upperBound else { return nil }
+        let searchEnd = min(upperBound - 1, amountIndex + 6)
+        return ((amountIndex + 1)...searchEnd)
             .first { isBillTimeLine(lines[$0]) }
             .map { lines[$0] }
     }
@@ -328,7 +512,8 @@ enum PaymentTextParser {
         let categoryFragments = [
             "餐饮", "美食", "爱车", "养车", "文化", "休闲", "投资", "理财",
             "购物", "交通", "出行", "停车", "转账", "退款", "生活", "服务",
-            "充值", "缴费", "商业服务", "车位", "日用", "百货", "收益", "群收款"
+            "充值", "缴费", "商业服务", "车位", "日用", "百货", "收益", "群收款",
+            "酒店", "住宿"
         ]
         return categoryFragments.contains { line.contains($0) }
     }
@@ -336,13 +521,14 @@ enum PaymentTextParser {
     private static func isStandaloneBillCategoryLine(_ line: String) -> Bool {
         let standaloneCategories: Set<String> = [
             "餐饮美食", "爱车养车", "文化休闲", "投资理财", "日用百货",
-            "退款", "充值缴费", "商业服务", "交通出行", "购物消费",
-            "生活服务", "转账", "消费", "收入"
+            "数码电器", "服饰装扮", "医疗健康", "教育培训", "退款",
+            "充值缴费", "商业服务", "交通出行", "购物消费", "生活服务",
+            "酒店住宿", "酒店旅游", "旅行住宿", "旅行交通", "转账", "消费", "收入"
         ]
         return standaloneCategories.contains(line)
     }
 
-    private static func billDate(from line: String, now: Date = .now) -> Date? {
+    fileprivate static func billDate(from line: String, now: Date = .now) -> Date? {
         let calendar = Calendar.current
 
         if let date = billDate(
@@ -395,8 +581,32 @@ enum PaymentTextParser {
               let minute = Int(line[minuteRange])
         else { return nil }
 
-        let year = calendar.component(.year, from: now)
-        return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))
+        return resolvedYearlessBillDate(
+            month: month,
+            day: day,
+            hour: hour,
+            minute: minute,
+            referenceDate: now,
+            calendar: calendar
+        )
+    }
+
+    fileprivate static func resolvedYearlessBillDate(
+        month: Int,
+        day: Int,
+        hour: Int,
+        minute: Int,
+        referenceDate: Date,
+        calendar: Calendar = .current
+    ) -> Date? {
+        let referenceYear = calendar.component(.year, from: referenceDate)
+        let futureGrace = calendar.date(byAdding: .day, value: 1, to: referenceDate) ?? referenceDate
+        let candidates = [referenceYear - 1, referenceYear, referenceYear + 1].compactMap { year in
+            calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))
+        }
+        let nonFutureCandidates = candidates.filter { $0 <= futureGrace }
+        return (nonFutureCandidates.isEmpty ? candidates : nonFutureCandidates)
+            .min { abs($0.timeIntervalSince(referenceDate)) < abs($1.timeIntervalSince(referenceDate)) }
     }
 
     private static func occurredAt(in text: String) -> Date? {
@@ -429,5 +639,350 @@ enum PaymentTextParser {
     private static func matches(pattern: String, in text: String) -> [NSTextCheckingResult] {
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         return regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+    }
+}
+
+private enum PaymentStructuredPayloadParser {
+    static func parse(
+        text: String,
+        preferredChannel: PaymentChannel?,
+        referenceDate: Date
+    ) -> [ParsedPayment] {
+        guard let json = extractJSON(from: text),
+              let data = json.data(using: .utf8),
+              let payload = try? JSONDecoder().decode(StructuredPaymentPayload.self, from: data) else {
+            return []
+        }
+
+        let rawItems = payload.payments ?? payload.transactions ?? payload.records ?? []
+        return rawItems.compactMap { item -> ParsedPayment? in
+            guard let amount = item.normalizedAmount,
+                  amount > 0 else {
+                return nil
+            }
+
+            let merchant = normalizedMerchant(item.merchant ?? item.title ?? item.payee ?? item.counterparty)
+            guard !merchant.isEmpty else { return nil }
+
+            let channel = channel(
+                from: [item.channel, payload.source, payload.platform].compactMap { $0 }.joined(separator: " "),
+                preferredChannel: preferredChannel
+            )
+            let category = category(from: item.category, merchant: merchant, note: item.note)
+            let occurredAt = occurredAt(from: item, referenceDate: referenceDate)
+            let note = [
+                item.note,
+                item.direction,
+                item.type,
+                item.rawText
+            ]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+
+            return ParsedPayment(
+                amount: amount,
+                merchant: merchant,
+                channel: channel,
+                note: note.isEmpty ? text : note,
+                occurredAt: occurredAt,
+                category: category,
+                categoryRaw: item.category
+            )
+        }
+    }
+
+    private static func extractJSON(from text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if trimmed.hasPrefix("```") {
+            let withoutFence = trimmed
+                .replacingOccurrences(of: "```json", with: "")
+                .replacingOccurrences(of: "```JSON", with: "")
+                .replacingOccurrences(of: "```", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return extractJSON(from: withoutFence)
+        }
+
+        if trimmed.hasPrefix("{"), trimmed.hasSuffix("}") {
+            return trimmed
+        }
+
+        guard let start = trimmed.firstIndex(of: "{"),
+              let end = trimmed.lastIndex(of: "}"),
+              start < end else {
+            return nil
+        }
+        return String(trimmed[start...end])
+    }
+
+    private static func normalizedMerchant(_ value: String?) -> String {
+        (value ?? "")
+            .replacingOccurrences(of: #"^[-+＋−]\s*"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func channel(from text: String, preferredChannel: PaymentChannel?) -> PaymentChannel {
+        let detected = PaymentTextParser.channel(in: text)
+        if detected != .other {
+            return detected
+        }
+        return preferredChannel ?? .other
+    }
+
+    private static func category(from rawCategory: String?, merchant: String, note: String?) -> ExpenseCategory {
+        if let mapped = PaymentPlatformCategoryMapper.category(from: rawCategory) {
+            return mapped.category
+        }
+        if let rawCategory,
+           let category = ExpenseCategory.allCases.first(where: { rawCategory.contains($0.rawValue) || $0.rawValue.contains(rawCategory) }) {
+            return category
+        }
+        return PaymentRuleEngine.defaultCategory(for: [merchant, rawCategory ?? "", note ?? ""].joined(separator: " "))
+    }
+
+    private static func occurredAt(from item: StructuredPaymentItem, referenceDate: Date) -> Date? {
+        let rawContext = [item.rawText, item.note]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .joined(separator: " ")
+        let candidates = [
+            item.occurredAt,
+            item.transactionTime,
+            [item.date, item.time].compactMap { $0 }.joined(separator: " ")
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+
+        for candidate in candidates {
+            if let date = fullDate(from: candidate) {
+                return normalizedStructuredDate(
+                    date,
+                    candidateText: candidate,
+                    rawContext: rawContext,
+                    referenceDate: referenceDate
+                )
+            }
+            if let date = PaymentTextParser.billDate(from: candidate, now: referenceDate) {
+                return date
+            }
+        }
+        return nil
+    }
+
+    private static func normalizedStructuredDate(
+        _ date: Date,
+        candidateText: String,
+        rawContext: String,
+        referenceDate: Date
+    ) -> Date {
+        let calendar = Calendar.current
+        let parsedYear = calendar.component(.year, from: date)
+        let referenceYear = calendar.component(.year, from: referenceDate)
+        guard abs(parsedYear - referenceYear) > 1,
+              !containsExplicitYear(rawContext),
+              let corrected = PaymentTextParser.resolvedYearlessBillDate(
+                month: calendar.component(.month, from: date),
+                day: calendar.component(.day, from: date),
+                hour: calendar.component(.hour, from: date),
+                minute: calendar.component(.minute, from: date),
+                referenceDate: referenceDate,
+                calendar: calendar
+              ) else {
+            return date
+        }
+
+        if containsExplicitYear(candidateText), !containsExplicitYear(rawContext) {
+            return corrected
+        }
+        return date
+    }
+
+    private static func containsExplicitYear(_ text: String) -> Bool {
+        text.range(of: #"(?:19|20)\d{2}\s*(?:年|-|/|\.)"#, options: .regularExpression) != nil
+    }
+
+    private static func fullDate(from text: String) -> Date? {
+        let normalized = text
+            .replacingOccurrences(of: "年", with: "-")
+            .replacingOccurrences(of: "月", with: "-")
+            .replacingOccurrences(of: "日", with: "")
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: "时", with: ":")
+            .replacingOccurrences(of: "分", with: ":")
+            .replacingOccurrences(of: "秒", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let formats = [
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm",
+            "yyyy-M-d HH:mm:ss",
+            "yyyy-M-d HH:mm",
+            "yyyy-MM-dd",
+            "yyyy-M-d"
+        ]
+        for format in formats {
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "zh_CN")
+            formatter.dateFormat = format
+            if let date = formatter.date(from: normalized) {
+                return date
+            }
+        }
+        return nil
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
+}
+
+private enum PaymentPlatformCategoryMapper {
+    static func category(from label: String?) -> (category: ExpenseCategory, raw: String)? {
+        let normalized = label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !normalized.isEmpty else { return nil }
+
+        let exactMatches: [String: ExpenseCategory] = [
+            "餐饮美食": .dining,
+            "爱车养车": .commute,
+            "交通出行": .commute,
+            "日用百货": .shopping,
+            "数码电器": .shopping,
+            "服饰装扮": .shopping,
+            "充值缴费": .housing,
+            "生活服务": .housing,
+            "医疗健康": .health,
+            "文化休闲": .entertainment,
+            "酒店住宿": .travel,
+            "酒店旅游": .travel,
+            "旅行交通": .travel,
+            "教育培训": .education,
+            "投资理财": .transfer,
+            "转账": .transfer,
+            "退款": .transfer,
+            "商业服务": .other
+        ]
+
+        if let category = exactMatches[normalized] {
+            return (category, normalized)
+        }
+
+        let fuzzyMatches: [(String, ExpenseCategory)] = [
+            ("餐饮", .dining), ("美食", .dining),
+            ("停车", .commute), ("爱车", .commute), ("交通", .commute),
+            ("购物", .shopping), ("百货", .shopping), ("数码", .shopping), ("电器", .shopping),
+            ("缴费", .housing), ("生活", .housing),
+            ("医疗", .health), ("健康", .health),
+            ("文化", .entertainment), ("休闲", .entertainment), ("娱乐", .entertainment),
+            ("酒店", .travel), ("住宿", .travel), ("旅行", .travel),
+            ("教育", .education), ("培训", .education),
+            ("投资", .transfer), ("理财", .transfer), ("收益", .transfer), ("退款", .transfer)
+        ]
+
+        if let match = fuzzyMatches.first(where: { normalized.contains($0.0) }) {
+            return (match.1, normalized)
+        }
+
+        return nil
+    }
+}
+
+private struct StructuredPaymentPayload: Decodable {
+    var source: String?
+    var platform: String?
+    var payments: [StructuredPaymentItem]?
+    var transactions: [StructuredPaymentItem]?
+    var records: [StructuredPaymentItem]?
+}
+
+private struct StructuredPaymentItem: Decodable {
+    var amountText: String?
+    var merchant: String?
+    var title: String?
+    var payee: String?
+    var counterparty: String?
+    var channel: String?
+    var category: String?
+    var occurredAt: String?
+    var transactionTime: String?
+    var date: String?
+    var time: String?
+    var direction: String?
+    var type: String?
+    var note: String?
+    var rawText: String?
+
+    var normalizedAmount: Decimal? {
+        guard let amountText else { return nil }
+        let cleaned = amountText
+            .replacingOccurrences(of: "¥", with: "")
+            .replacingOccurrences(of: "￥", with: "")
+            .replacingOccurrences(of: ",", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let decimal = Decimal(string: cleaned.replacingOccurrences(of: "＋", with: "+")) else {
+            return nil
+        }
+        return decimal < 0 ? -decimal : decimal
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case amount
+        case amountText
+        case merchant
+        case title
+        case payee
+        case counterparty
+        case channel
+        case category
+        case occurredAt
+        case transactionTime
+        case date
+        case time
+        case direction
+        case type
+        case note
+        case rawText
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        amountText = Self.decodeAmountText(from: container)
+        merchant = try? container.decode(String.self, forKey: .merchant)
+        title = try? container.decode(String.self, forKey: .title)
+        payee = try? container.decode(String.self, forKey: .payee)
+        counterparty = try? container.decode(String.self, forKey: .counterparty)
+        channel = try? container.decode(String.self, forKey: .channel)
+        category = try? container.decode(String.self, forKey: .category)
+        occurredAt = try? container.decode(String.self, forKey: .occurredAt)
+        transactionTime = try? container.decode(String.self, forKey: .transactionTime)
+        date = try? container.decode(String.self, forKey: .date)
+        time = try? container.decode(String.self, forKey: .time)
+        direction = try? container.decode(String.self, forKey: .direction)
+        type = try? container.decode(String.self, forKey: .type)
+        note = try? container.decode(String.self, forKey: .note)
+        rawText = try? container.decode(String.self, forKey: .rawText)
+    }
+
+    private static func decodeAmountText(from container: KeyedDecodingContainer<CodingKeys>) -> String? {
+        if let value = try? container.decode(String.self, forKey: .amount) {
+            return value
+        }
+        if let value = try? container.decode(Double.self, forKey: .amount) {
+            return String(value)
+        }
+        if let value = try? container.decode(Int.self, forKey: .amount) {
+            return String(value)
+        }
+        if let value = try? container.decode(String.self, forKey: .amountText) {
+            return value
+        }
+        if let value = try? container.decode(Double.self, forKey: .amountText) {
+            return String(value)
+        }
+        return nil
     }
 }

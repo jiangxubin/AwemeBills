@@ -1,7 +1,7 @@
 # 消费管家技术架构方案和回归测试方案
 
-日期：2026-05-26  
-状态：校准版草案  
+日期：2026-06-09
+状态：当前实现同步版
 范围：iPhone App、Share Extension、快捷指令/App Intent、导入管线、报告生成、通知、核心测试与回归流程  
 关联产品设计文档：`docs/awemebilling-product-design.md`  
 关联版本迭代文档：`docs/awemebilling-version-roadmap.md`
@@ -25,6 +25,7 @@
 - `ExpenseRecord`：已确认入账的消费记录，是总览、明细、报告和通知的核心数据源。
 - `ImportBatch`：一次导入任务，承接截图、文本、分享扩展、快捷指令等来源。
 - `ParsedPaymentCandidate`：待复核候选记录，进入账本前必须可编辑、可忽略、可确认。
+- `ParsedPayment` / `ParsedPaymentCandidate` / `ExpenseRecord`：截图导入链路需要透传并保存可选的 `merchantLogoPNGData`。该字段用于 UI 展示，不参与金额、时间、去重和统计计算。
 - `PaymentRule`：商户、分类、支付方式等规则学习结果。
 - `ArchiveReport`：周期报告记录，当前仍需从重建逻辑逐步升级为可信历史资产。
 - `BudgetPlan`：预算与周期状态相关数据。
@@ -32,7 +33,8 @@
 ### 2.2 服务层
 
 - `PaymentTextParser`：从通知文本或 OCR 文本中解析金额、商户、时间、支付方式。
-- `ReceiptImageParser`：执行截图识别，并把识别文本交给 parser。
+- `ReceiptImageParser`：执行截图识别，并把识别文本交给 parser；统一维护 GLM、腾讯 OCR、OCR.space、本机 Vision 的识别入口。
+- `ReceiptImageSegmenter`：在 OCR 前对微信/支付宝账单截图做灰线分段，并通过左侧视觉像素聚类裁剪商户 logo。分段失败时仍可从全图左侧直接提取 logo 序列。
 - `ImportPipeline`：创建导入批次、生成候选、接受候选、忽略候选、更新批次状态。
 - `PaymentRuleEngine`：从用户修正和历史记录中学习规则。
 - `ExpenseMutationService`：承接写入后的报告与通知刷新。
@@ -45,7 +47,8 @@
 flowchart TD
     A["输入源: 手动 / 文本 / 截图 / 分享 / 快捷指令 / URL"] --> B["ImportPipeline / Write Use Case"]
     B --> C["OCR 与文本解析"]
-    C --> D["规则学习与字段补全"]
+    C --> C1["商户 logo 裁剪与候选透传"]
+    C1 --> D["规则学习与字段补全"]
     D --> E["去重判断"]
     E --> F["ImportBatch + ParsedPaymentCandidate"]
     F --> G["复核队列"]
@@ -81,7 +84,9 @@ flowchart TD
 - OCR provider 不作为普通用户设置项暴露。
 - 用户看到的是“自动识别成功 / 本机兜底 / 识别失败 / 需要重点核对”的结果状态。
 - 隐私说明必须解释什么数据可能上传、为什么上传、如何关闭相关能力以及关闭后的替代路径。
-- OCR 回归样本使用脱敏文本 fixture，不把敏感截图提交入库。
+- OCR 统一入口顺序为 GLM -> 腾讯 OCR -> OCR.space -> 本机 Vision，渠道解析可以分开优化，但 provider 调度不应多处重复实现。
+- 商户 logo 裁剪优先在本机完成：先按浅灰/深色分隔线切行，再按左侧彩色像素聚类裁剪；无法分段时用全图左侧 logo 序列兜底。
+- OCR 回归样本优先使用脱敏文本 fixture；需要截图 fixture 时必须确认可提交范围，避免把敏感截图误纳入公开仓库。
 
 ## 4. 技术风险与改进点
 
@@ -97,9 +102,9 @@ flowchart TD
    - 风险：某些入口保存后刷新报告，某些入口遗漏刷新。
    - 改进：继续收敛到 `ExpenseMutationService`。
 
-4. OCR 样本不足
-   - 风险：少量单测无法覆盖真实账单截图复杂度。
-   - 改进：建立微信、支付宝、银行卡通知的脱敏文本 fixture。
+4. OCR 与截图视觉样本不足
+   - 风险：少量单测无法覆盖真实账单截图复杂度，尤其是灰线分段、错行、商户 logo 裁剪和渠道差异。
+   - 改进：继续建立微信、支付宝、银行卡通知的脱敏文本 fixture；对已授权截图保留真实图片回归，覆盖解析字段和 logo 数据透传。
 
 5. 版本信息遗漏
    - 风险：后续版本完成后忘记更新用户可见版本号和变化简介。
@@ -124,6 +129,9 @@ flowchart TD
   - 高质量识别文本优先。
   - 失败后兜底文本可解析。
   - 无有效文本时给出可解释失败。
+  - GLM 整图结构化返回时，仍能按可见账单行顺序把本机裁剪 logo 绑定到解析结果。
+  - 腾讯 OCR、OCR.space、本机 Vision 的分段候选都能携带对应行的 logo 数据。
+  - 微信/支付宝历史截图 fixture 能切出多枚商户 logo。
 - 周期与报告
   - 昨日、上周、上月、上季度、上一年边界。
   - 报告 upsert 不重复、不丢历史。
@@ -138,6 +146,7 @@ flowchart TD
 重点路径：
 
 - 分享截图进入 App 后展示待复核候选。
+- 截图导入候选卡片显示商户原始 logo；确认入账后明细列表仍保留该 logo。
 - 粘贴文本后顶部待复核数量、当前批次、全部待复核一致。
 - 接受候选后总览、明细、报告摘要同步刷新。
 - 手动新增、编辑、删除后触发同一套 mutation 流程。
@@ -158,7 +167,7 @@ flowchart TD
 
 - `xcodebuild` 真机或模拟器 build 通过。
 - 单元测试 target 可构建，并且核心测试通过。
-- 至少 20 条脱敏支付文本 fixture 通过解析回归。
+- 至少 20 条脱敏支付文本 fixture 通过解析回归；已授权微信/支付宝截图 fixture 要覆盖解析字段和商户 logo 保留。
 - 分享扩展、快捷指令、App 内导入不绕过复核队列。
 - 报告刷新不产生重复报告，也不删除用户期望保留的历史报告。
 - 用户可见版本号不带 `v` 前缀，并与 App 构建版本一致。

@@ -83,6 +83,7 @@ final class ParsedPaymentCandidate {
     var scene: String
     var channelRaw: String
     var note: String
+    @Attribute(.externalStorage) var merchantLogoPNGData: Data?
     var rawText: String
     var sourceFingerprint: String
     var confidence: Double
@@ -104,10 +105,11 @@ final class ParsedPaymentCandidate {
         self.batchID = batchID
         self.amount = payment.amount
         self.merchant = payment.merchant
-        self.categoryRaw = payment.category.rawValue
+        self.categoryRaw = payment.categoryRaw
         self.scene = scene
         self.channelRaw = payment.channel.rawValue
         self.note = payment.note
+        self.merchantLogoPNGData = payment.merchantLogoPNGData
         self.rawText = rawText
         self.sourceFingerprint = sourceFingerprint
         self.confidence = confidence
@@ -138,7 +140,9 @@ final class ParsedPaymentCandidate {
             channel: channel,
             note: note,
             occurredAt: occurredAt,
-            category: category
+            category: category,
+            categoryRaw: categoryRaw,
+            merchantLogoPNGData: merchantLogoPNGData
         )
     }
 }

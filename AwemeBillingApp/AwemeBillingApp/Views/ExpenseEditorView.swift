@@ -4,12 +4,13 @@ import SwiftUI
 struct ExpenseEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \ExpenseCategoryProfile.sortOrder) private var categoryProfiles: [ExpenseCategoryProfile]
     private let editingRecord: ExpenseRecord?
     private let onSaved: (() -> Void)?
 
     @State private var amount = ""
     @State private var merchant = ""
-    @State private var category: ExpenseCategory = .dining
+    @State private var categoryRaw = ExpenseCategory.dining.rawValue
     @State private var scene = ""
     @State private var channel: PaymentChannel = .alipay
     @State private var note = ""
@@ -25,7 +26,7 @@ struct ExpenseEditorView: View {
         self.onSaved = onSaved
         _amount = State(initialValue: record.map { NSDecimalNumber(decimal: $0.amount).stringValue } ?? "")
         _merchant = State(initialValue: record?.merchant ?? "")
-        _category = State(initialValue: record?.category ?? .dining)
+        _categoryRaw = State(initialValue: record?.categoryRaw ?? ExpenseCategory.dining.rawValue)
         _scene = State(initialValue: record?.scene ?? "")
         _channel = State(initialValue: record?.channel ?? .alipay)
         _note = State(initialValue: record?.note ?? "")
@@ -43,9 +44,9 @@ struct ExpenseEditorView: View {
                 }
 
                 Section("归类") {
-                    Picker("分类", selection: $category) {
-                        ForEach(ExpenseCategory.allCases) { category in
-                            Text(category.rawValue).tag(category)
+                    Picker("分类", selection: $categoryRaw) {
+                        ForEach(categoryNames, id: \.self) { category in
+                            Text(category).tag(category)
                         }
                     }
                     Picker("支付方式", selection: $channel) {
@@ -87,12 +88,16 @@ struct ExpenseEditorView: View {
         }
     }
 
+    private var categoryNames: [String] {
+        ExpenseCategoryCatalog.visibleNames(from: categoryProfiles, including: categoryRaw)
+    }
+
     @MainActor
     private func save() async {
         let draft = ManualExpenseDraft(
             amount: parsedAmount,
             merchant: merchant,
-            category: category,
+            categoryRaw: categoryRaw,
             scene: scene,
             channel: channel,
             note: note,

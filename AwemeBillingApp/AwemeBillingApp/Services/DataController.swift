@@ -7,6 +7,7 @@ enum DataController {
     static let sharedModelContainer: ModelContainer = {
         let schema = Schema([
             ExpenseRecord.self,
+            ExpenseCategoryProfile.self,
             ArchiveSchedule.self,
             ArchiveReport.self,
             ImportBatch.self,

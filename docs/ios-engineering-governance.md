@@ -49,7 +49,7 @@ AwemeBillingApp
 
 ## 4. Secret 管理
 
-真实 Secret 只能来自本地环境变量、未追踪的 `LocalSecrets.xcconfig` 或 Xcode 本机配置。`Info.plist` 和 project build settings 只允许保留 `$(TENCENT_OCR_SECRET_ID)`、`$(TENCENT_OCR_SECRET_KEY)` 这类占位符。
+真实 Secret 只能来自本地环境变量、未追踪的 `LocalSecrets.xcconfig` 或 Xcode 本机配置。`Info.plist` 和 project build settings 只允许保留 `$(GLM_OCR_API_KEY)`、`$(OCR_SPACE_API_KEY)`、`$(TENCENT_OCR_SECRET_ID)`、`$(TENCENT_OCR_SECRET_KEY)` 这类占位符。
 
 提交前应确认：
 

@@ -58,6 +58,7 @@ struct ImportReviewView: View {
 }
 
 private struct ImportCandidateRow: View {
+    @Query(sort: \ExpenseCategoryProfile.sortOrder) private var categoryProfiles: [ExpenseCategoryProfile]
     @Bindable var candidate: ParsedPaymentCandidate
     var onAccept: () async -> Void
     var onIgnore: () -> Void
@@ -65,11 +66,13 @@ private struct ImportCandidateRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: statusIcon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(statusColor)
-                    .frame(width: 34, height: 34)
-                    .background(statusColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                MerchantLogoBadge(
+                    merchant: candidate.merchant,
+                    category: candidate.category,
+                    rawText: candidate.rawText,
+                    logoPNGData: candidate.merchantLogoPNGData,
+                    size: 34
+                )
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(candidate.merchant)
@@ -104,8 +107,8 @@ private struct ImportCandidateRow: View {
 
                     HStack(spacing: 10) {
                         Picker("分类", selection: $candidate.categoryRaw) {
-                            ForEach(ExpenseCategory.allCases) { category in
-                                Text(category.rawValue).tag(category.rawValue)
+                            ForEach(categoryNames, id: \.self) { category in
+                                Text(category).tag(category)
                             }
                         }
                         .pickerStyle(.menu)
@@ -153,6 +156,10 @@ private struct ImportCandidateRow: View {
         }
     }
 
+    private var categoryNames: [String] {
+        ExpenseCategoryCatalog.visibleNames(from: categoryProfiles, including: candidate.categoryRaw)
+    }
+
     private var amountText: Binding<String> {
         Binding {
             NSDecimalNumber(decimal: candidate.amount).stringValue
@@ -179,16 +186,6 @@ private struct ImportCandidateRow: View {
             candidate.note
         } set: { value in
             candidate.note = value
-        }
-    }
-
-    private var statusIcon: String {
-        switch candidate.status {
-        case .pendingReview: "checklist"
-        case .accepted: "checkmark.circle.fill"
-        case .ignored: "minus.circle.fill"
-        case .duplicate: "doc.on.doc.fill"
-        case .failed: "exclamationmark.triangle.fill"
         }
     }
 

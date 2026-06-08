@@ -4,7 +4,7 @@ import SwiftData
 struct ManualExpenseDraft {
     var amount: Decimal?
     var merchant: String
-    var category: ExpenseCategory
+    var categoryRaw: String
     var scene: String
     var channel: PaymentChannel
     var note: String
@@ -16,7 +16,16 @@ struct ManualExpenseDraft {
 
     var normalizedScene: String {
         let trimmedScene = scene.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmedScene.isEmpty ? category.rawValue : trimmedScene
+        return trimmedScene.isEmpty ? trimmedCategory : trimmedScene
+    }
+
+    var trimmedCategory: String {
+        let trimmed = categoryRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? ExpenseCategory.other.rawValue : trimmed
+    }
+
+    var category: ExpenseCategory {
+        ExpenseCategory(rawValue: trimmedCategory) ?? .other
     }
 
     var parsedPayment: ParsedPayment? {
@@ -27,7 +36,8 @@ struct ManualExpenseDraft {
             channel: channel,
             note: note,
             occurredAt: occurredAt,
-            category: category
+            category: category,
+            categoryRaw: trimmedCategory
         )
     }
 }
@@ -52,7 +62,24 @@ enum ManualExpenseImportService {
         let existingRecords = ((try? context.fetch(FetchDescriptor<ExpenseRecord>())) ?? [])
             .filter { $0 !== editingRecord }
 
-        guard ExpenseRecordMaintenance.uniquePayments([payment], existing: existingRecords).first != nil else {
+        let draftKey = ExpenseRecordMaintenance.deduplicationKey(
+            amount: payment.amount,
+            merchant: draft.trimmedMerchant,
+            categoryRaw: draft.trimmedCategory,
+            channelRaw: draft.channel.rawValue,
+            occurredAt: draft.occurredAt
+        )
+        let existingKeys = Set(existingRecords.map {
+            ExpenseRecordMaintenance.deduplicationKey(
+                amount: $0.amount,
+                merchant: $0.merchant,
+                categoryRaw: $0.categoryRaw,
+                channelRaw: $0.channelRaw,
+                occurredAt: $0.occurredAt
+            )
+        })
+
+        guard !existingKeys.contains(draftKey) else {
             return .duplicate
         }
 
@@ -69,7 +96,7 @@ enum ManualExpenseImportService {
         let record = ExpenseRecord(
             amount: payment.amount,
             merchant: draft.trimmedMerchant,
-            category: draft.category,
+            categoryRaw: draft.trimmedCategory,
             scene: draft.normalizedScene,
             channel: draft.channel,
             note: draft.note,
@@ -87,7 +114,7 @@ enum ManualExpenseImportService {
     private static func apply(draft: ManualExpenseDraft, amount: Decimal, to record: ExpenseRecord) {
         record.amount = amount
         record.merchant = draft.trimmedMerchant
-        record.category = draft.category
+        record.categoryRaw = draft.trimmedCategory
         record.scene = draft.normalizedScene
         record.channel = draft.channel
         record.note = draft.note

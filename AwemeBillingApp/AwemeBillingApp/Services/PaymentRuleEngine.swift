@@ -22,18 +22,25 @@ enum PaymentRuleEngine {
                 channel: payment.channel,
                 note: payment.note,
                 occurredAt: payment.occurredAt,
-                category: rule.category
+                category: rule.category,
+                merchantLogoPNGData: payment.merchantLogoPNGData
             )
             return (parsed, rule.scene.isEmpty ? rule.category.rawValue : rule.scene, 0.96)
         }
 
+        let resolvedCategory = payment.category == .other ? fallback.category : payment.category
+        let resolvedCategoryRaw = payment.categoryRaw.isEmpty || payment.categoryRaw == ExpenseCategory.other.rawValue
+            ? resolvedCategory.rawValue
+            : payment.categoryRaw
         let parsed = ParsedPayment(
             amount: payment.amount,
             merchant: payment.merchant,
             channel: payment.channel,
             note: payment.note,
             occurredAt: payment.occurredAt,
-            category: fallback.category
+            category: resolvedCategory,
+            categoryRaw: resolvedCategoryRaw,
+            merchantLogoPNGData: payment.merchantLogoPNGData
         )
         return (parsed, fallback.scene, fallback.confidenceBoost)
     }

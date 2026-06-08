@@ -25,16 +25,20 @@ scripts/quality_gate.sh
 
 ```sh
 xcodebuild -project AwemeBillingApp/AwemeBillingApp.xcodeproj -scheme AwemeBillingApp -destination 'generic/platform=iOS Simulator' build-for-testing
-xcodebuild -project AwemeBillingApp/AwemeBillingApp.xcodeproj -scheme AwemeBillingApp -configuration Debug -destination 'generic/platform=iOS' -derivedDataPath DerivedData-device-install -allowProvisioningUpdates build
+xcodebuild -project AwemeBillingApp/AwemeBillingApp.xcodeproj -scheme AwemeBillingApp -configuration Debug -destination 'generic/platform=iOS' -derivedDataPath DerivedData-device-install -xcconfig LocalSecrets.xcconfig -allowProvisioningUpdates build
 ```
+
+当前补丁版本为 `1.0.1 (2)`。本版本重点修复截图导入后的商户 logo 保留：解析候选和已入账记录会优先展示截图里裁剪出的原始商户 logo，回归测试覆盖项目内微信/支付宝截图样本。
 
 ## 本地配置
 
 OCR Secret 不应写入 git。需要真机或本地云 OCR 时，在本地 `.xcconfig` 或 Xcode Scheme 环境变量中提供：
 
-```sh
-TENCENT_OCR_SECRET_ID=...
-TENCENT_OCR_SECRET_KEY=...
+```xcconfig
+GLM_OCR_API_KEY = ...
+OCR_SPACE_API_KEY = ...
+TENCENT_OCR_SECRET_ID = ...
+TENCENT_OCR_SECRET_KEY = ...
 ```
 
 仓库已忽略 `LocalSecrets.xcconfig`、`DerivedData*`、`.module-cache/`、Xcode 用户状态和本地调试截图。
