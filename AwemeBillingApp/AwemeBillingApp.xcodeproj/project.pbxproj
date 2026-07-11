@@ -18,7 +18,6 @@
 		000000000000000000000109 /* PaymentTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000209 /* PaymentTextParser.swift */; };
 		000000000000000000000110 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000210 /* OverviewView.swift */; };
 		000000000000000000000111 /* DetailListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000211 /* DetailListView.swift */; };
-		000000000000000000000112 /* SceneAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000212 /* SceneAnalysisView.swift */; };
 		000000000000000000000113 /* ArchiveScheduleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000213 /* ArchiveScheduleView.swift */; };
 		000000000000000000000114 /* PaymentMonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000214 /* PaymentMonitorView.swift */; };
 		000000000000000000000115 /* ExpenseEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000215 /* ExpenseEditorView.swift */; };
@@ -110,7 +109,6 @@
 		000000000000000000000209 /* PaymentTextParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentTextParser.swift; sourceTree = "<group>"; };
 		000000000000000000000210 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
 		000000000000000000000211 /* DetailListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailListView.swift; sourceTree = "<group>"; };
-		000000000000000000000212 /* SceneAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneAnalysisView.swift; sourceTree = "<group>"; };
 		000000000000000000000213 /* ArchiveScheduleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveScheduleView.swift; sourceTree = "<group>"; };
 		000000000000000000000214 /* PaymentMonitorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentMonitorView.swift; sourceTree = "<group>"; };
 		000000000000000000000215 /* ExpenseEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseEditorView.swift; sourceTree = "<group>"; };
@@ -246,7 +244,6 @@
 			children = (
 				000000000000000000000210 /* OverviewView.swift */,
 				000000000000000000000211 /* DetailListView.swift */,
-				000000000000000000000212 /* SceneAnalysisView.swift */,
 				000000000000000000000213 /* ArchiveScheduleView.swift */,
 				000000000000000000000214 /* PaymentMonitorView.swift */,
 				000000000000000000000215 /* ExpenseEditorView.swift */,
@@ -454,7 +451,6 @@
 				000000000000000000000109 /* PaymentTextParser.swift in Sources */,
 				000000000000000000000110 /* OverviewView.swift in Sources */,
 				000000000000000000000111 /* DetailListView.swift in Sources */,
-				000000000000000000000112 /* SceneAnalysisView.swift in Sources */,
 				000000000000000000000113 /* ArchiveScheduleView.swift in Sources */,
 				000000000000000000000114 /* PaymentMonitorView.swift in Sources */,
 				000000000000000000000115 /* ExpenseEditorView.swift in Sources */,
@@ -540,7 +536,7 @@
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				"ARCHS[sdk=iphonesimulator*]" = arm64;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
@@ -604,7 +600,7 @@
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				"ARCHS[sdk=iphonesimulator*]" = arm64;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
@@ -755,6 +751,7 @@
 		000000000000000000000A07 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 2NT2X9DHNP;
@@ -767,18 +764,19 @@
 					"@loader_path/../AwemeBillingApp.app",
 				);
 				MARKETING_VERSION = 1.0.1;
-				OTHER_LDFLAGS = "$(BUILT_PRODUCTS_DIR)/AwemeBillingApp.app/AwemeBillingApp.debug.dylib";
 				PRODUCT_BUNDLE_IDENTIFIER = com.aweme.billing.personal.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AwemeBillingApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AwemeBillingApp";
 			};
 			name = Debug;
 		};
 		000000000000000000000A08 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 2NT2X9DHNP;
@@ -791,12 +789,12 @@
 					"@loader_path/../AwemeBillingApp.app",
 				);
 				MARKETING_VERSION = 1.0.1;
-				OTHER_LDFLAGS = "$(BUILT_PRODUCTS_DIR)/AwemeBillingApp.app/AwemeBillingApp.debug.dylib";
 				PRODUCT_BUNDLE_IDENTIFIER = com.aweme.billing.personal.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AwemeBillingApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AwemeBillingApp";
 			};
 			name = Release;
 		};

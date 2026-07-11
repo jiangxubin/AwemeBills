@@ -5,6 +5,13 @@ import UIKit
 @testable import AwemeBillingApp
 
 final class AwemeBillingCoreTests: XCTestCase {
+    func testReleaseNotesUsePlainSemanticVersions() {
+        XCTAssertFalse(AppReleaseNotes.releases.isEmpty)
+        XCTAssertTrue(AppReleaseNotes.releases.allSatisfy { !$0.version.lowercased().hasPrefix("v") })
+        XCTAssertEqual(AppReleaseNotes.releases.first?.version, "1.0.1")
+        XCTAssertTrue(AppReleaseNotes.releases.allSatisfy { !$0.changes.isEmpty })
+    }
+
     func testAppThemeBackgroundAndInkAdaptToDarkAppearance() {
         let lightTrait = UITraitCollection(userInterfaceStyle: .light)
         let darkTrait = UITraitCollection(userInterfaceStyle: .dark)
@@ -187,7 +194,7 @@ final class AwemeBillingCoreTests: XCTestCase {
         XCTAssertEqual((payment.amount as NSDecimalNumber).doubleValue, 33.0, accuracy: 0.001)
     }
 
-    func testOCRTextSelectionPrefersGLMStructuredPayload() throws {
+    func testOCRTextSelectionUsesTencentBeforeGLMWhenBothParse() throws {
         let payments = ReceiptImageParser.parseOCRTexts(
             glmText: """
             {"source":"微信支付","payments":[{"merchant":"生活缴费","amount":"-55.10","channel":"微信支付","category":"居家","occurredAt":"2026-06-06 10:24","note":"微信账单"}]}
@@ -197,10 +204,9 @@ final class AwemeBillingCoreTests: XCTestCase {
         )
 
         let payment = try XCTUnwrap(payments.first)
-        XCTAssertEqual(payment.merchant, "生活缴费")
-        XCTAssertEqual(payment.channel, .wechat)
-        XCTAssertEqual(payment.category, .housing)
-        XCTAssertEqual((payment.amount as NSDecimalNumber).doubleValue, 55.1, accuracy: 0.001)
+        XCTAssertEqual(payment.merchant, "腾讯识别商户")
+        XCTAssertEqual(payment.channel, .alipay)
+        XCTAssertEqual((payment.amount as NSDecimalNumber).doubleValue, 66.0, accuracy: 0.001)
     }
 
     func testReceiptImageParserFallsBackWhenGLMProviderFails() async throws {
@@ -236,6 +242,44 @@ final class AwemeBillingCoreTests: XCTestCase {
         XCTAssertEqual(payments.count, 2)
         XCTAssertTrue(payments.contains { $0.merchant == "咖啡店" && double($0.amount) == 38.50 })
         XCTAssertTrue(payments.contains { $0.merchant == "书店" && double($0.amount) == 66.00 })
+    }
+
+    func testReceiptImageParserFallsThroughSummaryOnlyGLMToTencentProvider() async throws {
+        let payments = try await ReceiptImageParser.parseAll(
+            image: UIImage(),
+            preferredChannel: .alipay,
+            providers: [
+                StubReceiptOCRProvider(result: .success([
+                    ReceiptOCRTextCandidate(source: "bad-glm", text: """
+                    {"source":"支付宝","payments":[
+                    {"merchant":"6月支出","amount":"12153.05","channel":"支付宝","category":"统计","occurredAt":"2026-06-15 23:27","rawText":"6月\\n支出 ¥12,153.05\\n收入 ¥0.00"}
+                    ]}
+                    """)
+                ])),
+                StubReceiptOCRProvider(result: .success([
+                    ReceiptOCRTextCandidate(source: "tencent", text: """
+                    搜索交易记录
+                    6月
+                    大润发（长阳店）
+                    -46.13
+                    日用百货
+                    昨天 18:02
+                    美团
+                    -168.00
+                    餐饮美食
+                    昨天 12:35
+                    """)
+                ]))
+            ]
+        )
+
+        XCTAssertEqual(payments.count, 2)
+        XCTAssertFalse(payments.contains { abs(double($0.amount) - 12153.05) < 0.001 })
+        XCTAssertTrue(payments.contains { $0.merchant.contains("大润发") && abs(double($0.amount) - 46.13) < 0.001 })
+        XCTAssertTrue(
+            payments.contains { $0.merchant == "美团" && abs(double($0.amount) - 168.0) < 0.001 },
+            "got \(payments.map { "\($0.merchant):\(double($0.amount)):\($0.note)" })"
+        )
     }
 
     func testWeChatBillListTextParsesAllVisibleRows() throws {
@@ -387,6 +431,37 @@ final class AwemeBillingCoreTests: XCTestCase {
         XCTAssertEqual(calendar.component(.minute, from: occurredAt), 50)
     }
 
+    func testStructuredAlipayPayloadRejectsSummaryAndClosedOrders() throws {
+        let referenceDate = try XCTUnwrap(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 6, day: 15, hour: 23, minute: 27)))
+        let payments = PaymentTextParser.parseAll(
+            """
+            {"source":"支付宝","payments":[
+            {"merchant":"6月支出","amount":"12153.05","channel":"支付宝","category":"统计","occurredAt":"2026-06-15 23:27","rawText":"6月\\n支出 ¥12,153.05\\n收入 ¥0.00"},
+            {"merchant":"大润发（长阳店）","amount":"-46.13","channel":"支付宝","category":"日用百货","occurredAt":"2026-06-14 18:02","note":"日用百货","rawText":"大润发（长阳店）\\n日用百货\\n昨天 18:02\\n-46.13"},
+            {"merchant":"大润发（长阳店）","amount":"-2.90","channel":"支付宝","category":"日用百货","occurredAt":"2026-06-14 15:55","note":"日用百货","rawText":"大润发（长阳店）\\n日用百货\\n昨天 15:55\\n-2.90"},
+            {"merchant":"美团","amount":"-168.00","channel":"支付宝","category":"餐饮美食","occurredAt":"2026-06-14 12:35","note":"餐饮美食","rawText":"美团\\n餐饮美食\\n昨天 12:35\\n-168.00"},
+            {"merchant":"全新苹果Mac Studio M4 Max","amount":"13000.00","channel":"支付宝","category":"日用百货","occurredAt":"2026-06-14 11:50","note":"交易关闭","rawText":"全新苹果Mac Studio M4 Max\\n日用百货\\n昨天 11:50\\n13,000.00\\n交易关闭"},
+            {"merchant":"全新未拆封Mac Studio，苹果M4","amount":"13560.00","channel":"支付宝","category":"日用百货","occurredAt":"2026-06-14 11:19","note":"交易关闭","rawText":"全新未拆封Mac Studio，苹果M4\\n日用百货\\n昨天 11:19\\n13,560.00\\n交易关闭"},
+            {"merchant":"MM会员店 ONE万牌 三文鱼配方","amount":"-180.90","channel":"支付宝","category":"宠物","occurredAt":"2026-06-14 10:59","note":"等待确认收货","rawText":"MM会员店 ONE万牌 三文鱼配方\\n宠物\\n昨天 10:59\\n-180.90\\n等待确认收货"}
+            ]}
+            """,
+            preferredChannel: .alipay,
+            referenceDate: referenceDate
+        )
+
+        XCTAssertEqual(payments.count, 4)
+        XCTAssertFalse(payments.contains { abs(double($0.amount) - 12153.05) < 0.001 })
+        XCTAssertFalse(payments.contains { abs(double($0.amount) - 13000.0) < 0.001 })
+        XCTAssertFalse(payments.contains { abs(double($0.amount) - 13560.0) < 0.001 })
+        XCTAssertTrue(payments.contains { $0.merchant.contains("大润发") && abs(double($0.amount) - 46.13) < 0.001 })
+        XCTAssertTrue(payments.contains { $0.merchant.contains("大润发") && abs(double($0.amount) - 2.90) < 0.001 })
+        XCTAssertTrue(
+            payments.contains { $0.merchant == "美团" && abs(double($0.amount) - 168.0) < 0.001 },
+            "got \(payments.map { "\($0.merchant):\(double($0.amount)):\($0.note)" })"
+        )
+        XCTAssertTrue(payments.contains { $0.merchant.contains("MM会员店") && abs(double($0.amount) - 180.90) < 0.001 })
+    }
+
     func testTencentOCRTextRepairSortsTextByVisualRows() {
         let text = TencentOCRTextRepair.repairedText(
             from: [
@@ -426,6 +501,72 @@ final class AwemeBillingCoreTests: XCTestCase {
         XCTAssertEqual(payments.count, 2)
         XCTAssertTrue(payments.allSatisfy { $0.channel == .wechat })
         XCTAssertTrue(payments.contains { $0.merchant.contains("群收款") && double($0.amount) == 187.80 })
+    }
+
+    func testStructuredWeChatRowsPreferRawBillBlockOverBadGLMFields() throws {
+        let referenceDate = try XCTUnwrap(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 6, day: 10, hour: 0, minute: 25)))
+        let payments = PaymentTextParser.parseAll(
+            latestWeChatBadStructuredPayload,
+            preferredChannel: .wechat,
+            referenceDate: referenceDate
+        )
+
+        XCTAssertEqual(payments.count, 2)
+        XCTAssertFalse(payments.contains { $0.merchant == "微信支付" })
+        XCTAssertFalse(payments.contains { abs(double($0.amount) - 5849.99) < 0.001 })
+
+        let june5Payment = try XCTUnwrap(payments.first { $0.note.contains("6月5日 22:19") })
+        XCTAssertEqual(june5Payment.merchant, "上海耀汇充科技有限公司")
+        XCTAssertEqual(double(june5Payment.amount), 99.0, accuracy: 0.001)
+
+        let june8Payment = try XCTUnwrap(payments.first { $0.note.contains("6月8日 22:46") })
+        XCTAssertEqual(june8Payment.merchant, "上海耀汇充科技有限公司")
+        XCTAssertEqual(double(june8Payment.amount), 100.0, accuracy: 0.001)
+
+        let calendar = Calendar(identifier: .gregorian)
+        XCTAssertEqual(calendar.component(.day, from: try XCTUnwrap(june5Payment.occurredAt)), 5)
+        XCTAssertEqual(calendar.component(.hour, from: try XCTUnwrap(june5Payment.occurredAt)), 22)
+        XCTAssertEqual(calendar.component(.minute, from: try XCTUnwrap(june5Payment.occurredAt)), 19)
+        XCTAssertEqual(calendar.component(.day, from: try XCTUnwrap(june8Payment.occurredAt)), 8)
+        XCTAssertEqual(calendar.component(.hour, from: try XCTUnwrap(june8Payment.occurredAt)), 22)
+        XCTAssertEqual(calendar.component(.minute, from: try XCTUnwrap(june8Payment.occurredAt)), 46)
+    }
+
+    @MainActor
+    func testWeChatUserImportRegressionCreatesReviewCandidatesFromCorrectedRows() async throws {
+        for filename in ["微信消费.PNG", "微信消费-导入1.PNG", "微信消费-导入2.PNG"] {
+            let url = workspaceImageURL(named: filename)
+            try XCTSkipUnless(FileManager.default.fileExists(atPath: url.path), "Missing local user regression image \(filename)")
+            XCTAssertNotNil(UIImage(contentsOfFile: url.path), "Unreadable local user regression image \(filename)")
+        }
+
+        let imageURL = workspaceImageURL(named: "微信消费.PNG")
+        let image = try XCTUnwrap(UIImage(contentsOfFile: imageURL.path))
+        let payments = try await ReceiptImageParser.parseAll(
+            image: image,
+            preferredChannel: .wechat,
+            providers: [
+                StubReceiptOCRProvider(result: .success([
+                    ReceiptOCRTextCandidate(source: "observed-bad-glm", text: latestWeChatBadStructuredPayload)
+                ]))
+            ]
+        )
+        let context = try makeInMemoryContext()
+        let candidates = ImportPipeline.createBatch(
+            source: .screenshot,
+            rawText: latestWeChatBadStructuredPayload,
+            payments: payments,
+            scene: "截图解析",
+            context: context
+        )
+
+        XCTAssertEqual(candidates.count, 2)
+        XCTAssertTrue(candidates.allSatisfy { $0.status == .pendingReview })
+        XCTAssertFalse(candidates.contains { $0.merchant == "微信支付" })
+        XCTAssertFalse(candidates.contains { abs(double($0.amount) - 5849.99) < 0.001 })
+        XCTAssertTrue(candidates.contains { $0.merchant == "上海耀汇充科技有限公司" && abs(double($0.amount) - 99.0) < 0.001 })
+        XCTAssertTrue(candidates.contains { $0.merchant == "上海耀汇充科技有限公司" && abs(double($0.amount) - 100.0) < 0.001 })
+        XCTAssertGreaterThanOrEqual(candidates.filter { $0.merchantLogoPNGData != nil }.count, 1)
     }
 
     func testPaymentScreenshotFixturesUseStructuredRecognitionExpectations() async throws {
@@ -489,6 +630,54 @@ final class AwemeBillingCoreTests: XCTestCase {
 
         XCTAssertGreaterThanOrEqual(logos.count, 4)
         XCTAssertTrue(logos.allSatisfy { $0.count > 300 })
+    }
+
+    func testLiveGLMRecognizesLatestAlipayScreenshotWhenEnabled() async throws {
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["AWEME_BILLING_RUN_LIVE_OCR_IMAGE_TESTS"] == "1",
+            "Live OCR image tests are opt-in."
+        )
+        let provider = try XCTUnwrap(ReceiptImageParser.configuredGLMProviderForTesting(), "GLM key is not configured")
+        let image = try latestAlipay5164Image()
+        let candidates = try await provider.recognizeTextCandidates(from: image, preferredChannel: .alipay)
+        let payments = candidates.flatMap {
+            PaymentTextParser.parseAll($0.text, preferredChannel: .alipay, referenceDate: latestAlipay5164ReferenceDate())
+        }
+
+        XCTAssertFalse(candidates.isEmpty)
+        XCTAssertFalse(payments.contains { abs(double($0.amount) - 12153.05) < 0.001 })
+        XCTAssertTrue(
+            payments.contains { $0.merchant.contains("大润发") && abs(double($0.amount) - 46.13) < 0.001 },
+            "GLM payments: \(payments.map { "\($0.merchant):\(double($0.amount))" })"
+        )
+        XCTAssertTrue(
+            payments.contains { $0.merchant == "美团" && abs(double($0.amount) - 168.0) < 0.001 },
+            "GLM payments: \(payments.map { "\($0.merchant):\(double($0.amount))" })"
+        )
+    }
+
+    func testLiveTencentRecognizesLatestAlipayScreenshotWhenEnabled() async throws {
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["AWEME_BILLING_RUN_LIVE_OCR_IMAGE_TESTS"] == "1",
+            "Live OCR image tests are opt-in."
+        )
+        let provider = try XCTUnwrap(ReceiptImageParser.configuredTencentProviderForTesting(), "Tencent OCR credentials are not configured")
+        let image = try latestAlipay5164Image()
+        let candidates = try await provider.recognizeTextCandidates(from: image, preferredChannel: .alipay)
+        let payments = candidates.flatMap {
+            PaymentTextParser.parseAll($0.text, preferredChannel: .alipay, referenceDate: latestAlipay5164ReferenceDate())
+        }
+
+        XCTAssertFalse(candidates.isEmpty)
+        XCTAssertFalse(payments.contains { abs(double($0.amount) - 12153.05) < 0.001 })
+        XCTAssertTrue(
+            payments.contains { $0.merchant.contains("大润发") && abs(double($0.amount) - 46.13) < 0.001 },
+            "Tencent payments: \(payments.map { "\($0.merchant):\(double($0.amount))" })"
+        )
+        XCTAssertTrue(
+            payments.contains { $0.merchant == "美团" && abs(double($0.amount) - 168.0) < 0.001 },
+            "Tencent payments: \(payments.map { "\($0.merchant):\(double($0.amount))" })"
+        )
     }
 
     @MainActor
@@ -822,7 +1011,36 @@ final class AwemeBillingCoreTests: XCTestCase {
             .deletingLastPathComponent()
         return appRoot.appendingPathComponent(filename)
     }
+
+    private func workspaceImageURL(named filename: String) -> URL {
+        let testFileURL = URL(fileURLWithPath: #filePath)
+        let workspaceRoot = testFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return workspaceRoot.appendingPathComponent(filename)
+    }
+
+    private func latestAlipay5164Image() throws -> UIImage {
+        let imageURL = URL(fileURLWithPath: "/Users/augustus/Downloads/IMG_5164.PNG")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: imageURL.path), "Current Alipay screenshot is not available")
+        return try XCTUnwrap(UIImage(contentsOfFile: imageURL.path))
+    }
+
+    private func latestAlipay5164ReferenceDate() -> Date {
+        Calendar(identifier: .gregorian).date(
+            from: DateComponents(year: 2026, month: 6, day: 15, hour: 23, minute: 27)
+        ) ?? Date(timeIntervalSince1970: 1_781_539_620)
+    }
 }
+
+private let latestWeChatBadStructuredPayload = """
+{"source":"微信支付","payments":[
+{"merchant":"微信支付","amount":"86.59","channel":"微信支付","category":"转账","occurredAt":"2026-06-05 22:19","note":"微信支付截图解析","rawText":"上海耀汇充科技有限公司\\n-99.00\\n6月5日 22:19"},
+{"merchant":"微信支付","amount":"80.24","channel":"微信支付","category":"转账","occurredAt":"2026-06-08 22:46","note":"微信支付截图解析","rawText":"上海耀汇充科技有限公司\\n-100.00\\n6月8日 22:46"},
+{"merchant":"微信支付","amount":"5849.99","channel":"微信支付","category":"其他","occurredAt":"2026-06-10 00:24","note":"微信支付截图解析","rawText":"-\\n......\\n-"}
+]}
+"""
 
 private enum StubReceiptOCRError: Error {
     case failed

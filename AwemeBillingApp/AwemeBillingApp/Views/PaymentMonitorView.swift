@@ -33,12 +33,12 @@ struct PaymentMonitorView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    importCard
                     reviewCard
+                    importCard
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 14)
-                .padding(.bottom, 118)
+                .padding(.bottom, 30)
             }
             .background(AppTheme.background)
             .navigationTitle("导入")
@@ -75,7 +75,7 @@ struct PaymentMonitorView: View {
 
     private var importCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "导入方式", subtitle: "截图 / 文本 / 手动")
+            SectionHeader(title: "新增导入", subtitle: "截图 / 文本 / 手动")
             AppCard {
                 VStack(alignment: .leading, spacing: 16) {
                     LazyVGrid(columns: importColumns, spacing: 10) {
@@ -245,7 +245,7 @@ struct PaymentMonitorView: View {
 
     private var reviewCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "导入复核", subtitle: reviewSubtitle)
+            SectionHeader(title: "待复核", subtitle: reviewSubtitle)
             AppCard {
                 VStack(alignment: .leading, spacing: 12) {
                     reviewQueueSummary

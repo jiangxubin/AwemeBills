@@ -13,6 +13,7 @@ struct DetailListView: View {
     @State private var pendingDeletion: DetailDeletionRequest?
     @State private var isSelectingRecords = false
     @State private var selectedRecordIDs: Set<PersistentIdentifier> = []
+    @State private var searchText = ""
 
     private var monthFilters: [ExpenseMonthFilter] {
         ExpenseMonthFilter.filters(from: records, including: selectedMonthID)
@@ -33,7 +34,17 @@ struct DetailListView: View {
             } ?? true
             let matchesScene = selectedScene.map { sceneFilterKey(record.scene) == sceneFilterKey($0) } ?? true
             let matchesChannel = selectedChannelRaw.map { record.channelRaw == $0 } ?? true
-            return matchesCategory && matchesScene && matchesChannel
+            let normalizedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let searchableText = [
+                record.merchant,
+                record.categoryRaw,
+                record.scene,
+                record.channelRaw,
+                record.note
+            ].joined(separator: " ")
+            let matchesSearch = normalizedSearch.isEmpty
+                || searchableText.localizedCaseInsensitiveContains(normalizedSearch)
+            return matchesCategory && matchesScene && matchesChannel && matchesSearch
         }
     }
 
@@ -58,6 +69,7 @@ struct DetailListView: View {
             }
             .navigationTitle("明细")
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, prompt: "搜索商户、分类或备注")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     if !filteredRecords.isEmpty {

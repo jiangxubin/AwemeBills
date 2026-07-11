@@ -72,23 +72,31 @@ final class AwemeBillingUITests: XCTestCase {
         let app = launchApp()
 
         app.tabBars.buttons["我的"].tap()
-        XCTAssertTrue(app.buttons["消费记录推送设置"].waitForExistence(timeout: 5))
-        app.buttons["消费记录推送设置"].tap()
+        let pushSettings = app.buttons["消费记录推送设置"]
+        reveal(pushSettings, in: app)
+        XCTAssertTrue(pushSettings.waitForExistence(timeout: 5))
+        pushSettings.tap()
 
         XCTAssertTrue(app.navigationBars["消费记录推送设置"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["保存并更新推送"].waitForExistence(timeout: 3))
+        let saveButton = app.buttons["保存并更新推送"]
+        reveal(saveButton, in: app)
+        XCTAssertTrue(saveButton.waitForExistence(timeout: 3))
     }
 
-    func testProfileExposesOCRRecognitionStatistics() throws {
+    func testProfileExposesPrivacyAndVersionHistory() throws {
         let app = launchApp()
 
         app.tabBars.buttons["我的"].tap()
-        let statisticsTitle = app.staticTexts["识别结果统计"]
-        if !statisticsTitle.waitForExistence(timeout: 2) {
-            app.swipeUp()
-        }
+        let privacyTitle = app.staticTexts["识别与隐私"]
+        reveal(privacyTitle, in: app)
+        XCTAssertTrue(privacyTitle.waitForExistence(timeout: 5))
 
-        XCTAssertTrue(statisticsTitle.waitForExistence(timeout: 5))
+        let versionHistory = app.buttons["查看全部版本变化"]
+        reveal(versionHistory, in: app, attempts: 4)
+        XCTAssertTrue(versionHistory.waitForExistence(timeout: 5))
+        versionHistory.tap()
+        XCTAssertTrue(app.navigationBars["版本变化"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["1.0.1"].waitForExistence(timeout: 3))
     }
 
     func testProfileDarkAppearanceKeepsSettingsReachable() throws {
@@ -98,7 +106,9 @@ final class AwemeBillingUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["本机账本"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["消费类型管理"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["消费记录推送设置"].waitForExistence(timeout: 3))
+        let pushSettings = app.buttons["消费记录推送设置"]
+        reveal(pushSettings, in: app)
+        XCTAssertTrue(pushSettings.waitForExistence(timeout: 3))
     }
 
     func testDetailUsesMonthAndQuickFiltersOnly() throws {
@@ -139,21 +149,56 @@ final class AwemeBillingUITests: XCTestCase {
         app.buttons["完成选择"].tap()
     }
 
-    func testOverviewOwnsSpendingStructureCharts() throws {
-        let app = launchApp()
+    func testDetailSearchFindsMerchant() throws {
+        let app = launchApp(arguments: ["-ui-testing-with-samples"])
+
+        app.tabBars.buttons["明细"].tap()
+        XCTAssertTrue(app.navigationBars["明细"].waitForExistence(timeout: 5))
+
+        let searchField = app.searchFields["搜索商户、分类或备注"]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        searchField.typeText("盒马")
+
+        XCTAssertTrue(app.staticTexts["盒马"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["咖啡店"].exists)
+    }
+
+    func testOverviewShowsFocusedStatusWithoutChartControls() throws {
+        let app = launchApp(arguments: ["-ui-testing-with-samples"])
 
         if app.tabBars.buttons["总览"].exists {
             app.tabBars.buttons["总览"].tap()
         }
 
-        XCTAssertTrue(app.buttons["查看周度消费柱状图"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["查看月度消费柱状图"].waitForExistence(timeout: 3))
-        app.buttons["查看月度消费柱状图"].tap()
+        XCTAssertTrue(app.staticTexts["本月支出"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["预算"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["最近记录"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["总览记一笔"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["查看柱状图"].exists)
+        XCTAssertFalse(app.buttons["查看饼图"].exists)
+    }
 
-        let structureTitle = app.staticTexts["消费分析"]
-        XCTAssertTrue(structureTitle.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["查看柱状图"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["查看饼图"].waitForExistence(timeout: 3))
+    func testImportKeepsPendingReviewBeforeNewImport() throws {
+        let app = launchApp()
+
+        app.tabBars.buttons["导入"].tap()
+
+        let reviewTitle = app.staticTexts["待复核"]
+        let importTitle = app.staticTexts["新增导入"]
+        XCTAssertTrue(reviewTitle.waitForExistence(timeout: 5))
+        XCTAssertTrue(importTitle.waitForExistence(timeout: 5))
+        XCTAssertLessThan(reviewTitle.frame.minY, importTitle.frame.minY)
+    }
+
+    func testReportTabRestoresPeriodReviewFlow() throws {
+        let app = launchApp(arguments: ["-ui-testing-with-samples"])
+
+        app.tabBars.buttons["报告"].tap()
+
+        XCTAssertTrue(app.navigationBars["报告"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["报告中心"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.segmentedControls.buttons["每月"].waitForExistence(timeout: 3))
     }
 
     private func launchApp(arguments: [String] = []) -> XCUIApplication {
@@ -161,6 +206,12 @@ final class AwemeBillingUITests: XCTestCase {
         app.launchArguments = ["-ui-testing"] + arguments
         app.launch()
         return app
+    }
+
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication, attempts: Int = 3) {
+        for _ in 0..<attempts where !element.exists {
+            app.swipeUp()
+        }
     }
 
 }

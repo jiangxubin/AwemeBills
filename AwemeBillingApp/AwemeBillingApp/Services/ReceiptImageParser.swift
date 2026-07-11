@@ -25,14 +25,14 @@ enum OCRProviderConfigurationDiagnostics {
     static func snapshot() -> [OCRProviderConfigurationSnapshot] {
         [
             OCRProviderConfigurationSnapshot(
-                provider: .glm,
-                isConfigured: GLMReceiptOCRConfiguration.apiKey != nil,
-                detail: GLMReceiptOCRConfiguration.apiKey == nil ? "未注入 GLM_OCR_API_KEY" : "已注入"
-            ),
-            OCRProviderConfigurationSnapshot(
                 provider: .tencent,
                 isConfigured: ReceiptImageParser.tencentOCRCredentials != nil,
                 detail: ReceiptImageParser.tencentOCRCredentials == nil ? "未注入腾讯 SecretId/SecretKey" : "已注入"
+            ),
+            OCRProviderConfigurationSnapshot(
+                provider: .glm,
+                isConfigured: GLMReceiptOCRConfiguration.apiKey != nil,
+                detail: GLMReceiptOCRConfiguration.apiKey == nil ? "未注入 GLM_OCR_API_KEY" : "已注入"
             ),
             OCRProviderConfigurationSnapshot(
                 provider: .ocrSpace,
@@ -204,17 +204,17 @@ enum ReceiptImageParser {
         visionText: String,
         preferredChannel: PaymentChannel? = nil
     ) -> [ParsedPayment] {
-        if let glmText {
-            let glmPayments = PaymentTextParser.parseAll(glmText, preferredChannel: preferredChannel)
-            if !glmPayments.isEmpty {
-                return glmPayments
-            }
-        }
-
         if let tencentText {
             let tencentPayments = PaymentTextParser.parseAll(tencentText, preferredChannel: preferredChannel)
             if !tencentPayments.isEmpty {
                 return tencentPayments
+            }
+        }
+
+        if let glmText {
+            let glmPayments = PaymentTextParser.parseAll(glmText, preferredChannel: preferredChannel)
+            if !glmPayments.isEmpty {
+                return glmPayments
             }
         }
 
@@ -230,11 +230,11 @@ enum ReceiptImageParser {
 
     private static func defaultProviders() -> [any ReceiptOCRProvider] {
         var providers: [any ReceiptOCRProvider] = []
-        if let apiKey = GLMReceiptOCRConfiguration.apiKey {
-            providers.append(GLMReceiptOCRProvider(apiKey: apiKey))
-        }
         if let credentials = tencentOCRCredentials {
             providers.append(TencentReceiptOCRProvider(credentials: credentials))
+        }
+        if let apiKey = GLMReceiptOCRConfiguration.apiKey {
+            providers.append(GLMReceiptOCRProvider(apiKey: apiKey))
         }
         if let apiKey = OCRSpaceReceiptOCRConfiguration.apiKey {
             providers.append(OCRSpaceReceiptOCRProvider(apiKey: apiKey))
@@ -242,6 +242,18 @@ enum ReceiptImageParser {
         providers.append(LocalVisionReceiptOCRProvider())
         return providers
     }
+
+    #if DEBUG
+    static func configuredGLMProviderForTesting() -> (any ReceiptOCRProvider)? {
+        guard let apiKey = GLMReceiptOCRConfiguration.apiKey else { return nil }
+        return GLMReceiptOCRProvider(apiKey: apiKey)
+    }
+
+    static func configuredTencentProviderForTesting() -> (any ReceiptOCRProvider)? {
+        guard let credentials = tencentOCRCredentials else { return nil }
+        return TencentReceiptOCRProvider(credentials: credentials)
+    }
+    #endif
 
     fileprivate static func recognizeTextWithTencentOCR(image: UIImage, credentials: TencentOCRCredentials) async throws -> String? {
         guard let imageData = image.jpegData(compressionQuality: 0.82) else { return nil }
@@ -1168,6 +1180,8 @@ private struct GLMReceiptOCRService {
         8. 例如同一张支付宝列表中“C河间门市-pos1 / 日用百货 / 今天 13:38 / -14.35”和“美团 / 餐饮美食 / 今天 12:34 / -221.00”是两条由灰线隔开的独立记录，不能把“日用百货”放到美团上。
         9. 如果截图显示“今天/昨天”或“05-31 / 5月31日”这类不带年份的时间，以当前导入上下文 \(currentYear) 年为参考，跨年边界取最接近当前日期的合理年份，不要臆造 2024、2025 等截图中没有出现的年份；无法确定日期时仍填写可见的月日和时间。
         10. 商户文字被省略号截断时，保留可见部分，不要编造。
+        11. merchant 必须是本条记录的商户、交易对象或收款方，不要把“微信支付”“支付宝”这种支付渠道名称填成 merchant；如果某个区块只有汇总金额、占位符或看不清商户，就不要输出这条记录。
+        12. rawText 必须和 merchant、amount、occurredAt 同属于同一个视觉分隔线区块；如果 rawText 里的主金额和你准备输出的 amount 冲突，以 rawText 所在区块的右侧主金额为准。
         """
     }
 }

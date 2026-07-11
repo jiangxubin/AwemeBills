@@ -23,7 +23,7 @@ struct ContentView: View {
                 manualImportRequestID = UUID()
             }
                 .tabItem {
-                    Label("总览", systemImage: "chart.pie")
+                    Label("总览", systemImage: "rectangle.grid.1x2")
                 }
                 .tag(AppTab.overview)
 
@@ -43,6 +43,12 @@ struct ContentView: View {
                 }
                 .tag(AppTab.importing)
 
+            ArchiveScheduleView()
+                .tabItem {
+                    Label("报告", systemImage: "doc.text")
+                }
+                .tag(AppTab.reports)
+
             ProfileSettingsView()
                 .tabItem {
                     Label("我的", systemImage: "person.crop.circle")
@@ -51,6 +57,9 @@ struct ContentView: View {
         }
         .tint(AppTheme.accent)
         .preferredColorScheme(preferredColorScheme)
+        .onAppear {
+            seedUITestRecordsIfNeeded()
+        }
         .task {
             await refreshArchivesAndNotifications(requestAuthorizationIfNeeded: true)
         }
@@ -79,7 +88,10 @@ struct ContentView: View {
         seedUITestRecordsIfNeeded()
         ExpenseCategoryCatalog.ensureDefaults(profiles: categoryProfiles, context: modelContext)
         let allSchedules = ensureDefaultSchedules()
-        let cleanup = ExpenseRecordMaintenance.cleanup(records: expenses, context: modelContext)
+        let isSampleUITest = ProcessInfo.processInfo.arguments.contains("-ui-testing-with-samples")
+        let cleanup = isSampleUITest
+            ? ExpenseRecordMaintenance.CleanupResult()
+            : ExpenseRecordMaintenance.cleanup(records: expenses, context: modelContext)
         let currentRecords = (try? modelContext.fetch(FetchDescriptor<ExpenseRecord>())) ?? expenses
         let currentReports = (try? modelContext.fetch(FetchDescriptor<ArchiveReport>())) ?? reports
         if cleanup.didChange || !currentReports.isEmpty {
@@ -166,5 +178,6 @@ private enum AppTab: Hashable {
     case overview
     case details
     case importing
+    case reports
     case profile
 }

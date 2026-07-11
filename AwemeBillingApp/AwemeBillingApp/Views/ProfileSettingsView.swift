@@ -7,9 +7,7 @@ struct ProfileSettingsView: View {
     @Query(sort: \ArchiveSchedule.periodRaw) private var schedules: [ArchiveSchedule]
     @Query(sort: \ExpenseCategoryProfile.sortOrder) private var categoryProfiles: [ExpenseCategoryProfile]
     @AppStorage("appearanceMode") private var appearanceMode = "system"
-    @AppStorage("advancedAnalysisControlsEnabled") private var advancedAnalysisControlsEnabled = false
     @State private var ocrStatistics = OCRRecognitionStatistics.snapshot()
-    @State private var ocrConfigurations = OCRProviderConfigurationDiagnostics.snapshot()
 
     var body: some View {
         NavigationStack {
@@ -43,16 +41,6 @@ struct ProfileSettingsView: View {
                     }
                     .accessibilityLabel("消费类型管理")
 
-                    Toggle(isOn: $advancedAnalysisControlsEnabled) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("高级分析设置")
-                            Text("打开后，总览消费分析会显示空心/实心饼图、横向/竖向柱状图等细分样式。")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .accessibilityLabel("高级分析设置")
-
                     NavigationLink {
                         ExpenseRecordPushSettingsView()
                     } label: {
@@ -63,47 +51,56 @@ struct ProfileSettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .accessibilityLabel("消费记录推送设置")
                 }
 
-                Section("关于") {
+                Section("隐私与自动化") {
                     paymentAutomationInfo
 
                     DisclosureGroup {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("识别链路配置")
-                                .font(.caption.weight(.semibold))
+                            Text("账本始终保存在本机。解析复杂截图时，图像可能发送给已配置的在线识别服务；未配置或识别失败时会改用本机识别。")
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                            ForEach(ocrConfigurations) { item in
-                                OCRProviderConfigurationRow(snapshot: item)
-                            }
+                            SettingsInfoRow(
+                                title: "本机统计",
+                                systemImage: "chart.bar.xaxis",
+                                text: ocrStatisticsSummary
+                            )
 
-                            Divider()
-
-                            if ocrStatistics.allSatisfy({ $0.attempts == 0 }) {
-                                Text("暂无截图识别调用记录。")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                ForEach(ocrStatistics) { item in
-                                    OCRRecognitionStatisticRow(snapshot: item)
-                                }
-                            }
-
-                            Text("统计保存在本机，用于观察识别链路稳定性；不会上传消费内容。")
+                            Text("识别次数和成功率只保存在本机，不包含消费正文和截图内容。")
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.tertiary)
                         }
                         .padding(.vertical, 4)
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("识别结果统计")
-                            Text("\(ocrConfigurationSummary) · \(ocrStatisticsSummary)")
+                            Text("识别与隐私")
+                            Text("自动选择可用识别方式")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    LabeledContent("版本", value: appVersion)
+                }
+
+                Section("版本") {
+                    LabeledContent("当前版本", value: appVersion)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("本版本变化")
+                            .font(.subheadline.weight(.semibold))
+                        ForEach(currentRelease.changes, id: \.self) { change in
+                            Label(change, systemImage: "checkmark")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+
+                    NavigationLink("查看全部版本变化") {
+                        VersionHistoryView(releases: AppReleaseNotes.releases)
+                    }
                 }
             }
             .scrollContentBackground(.hidden)
@@ -114,7 +111,6 @@ struct ProfileSettingsView: View {
                 ExpenseCategoryCatalog.ensureDefaults(profiles: categoryProfiles, context: modelContext)
                 try? modelContext.save()
                 ocrStatistics = OCRRecognitionStatistics.snapshot()
-                ocrConfigurations = OCRProviderConfigurationDiagnostics.snapshot()
             }
         }
     }
@@ -138,17 +134,17 @@ struct ProfileSettingsView: View {
         return "\(version) (\(build))"
     }
 
+    private var currentRelease: AppReleaseNote {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.1"
+        return AppReleaseNotes.releases.first { $0.version == version }
+            ?? AppReleaseNote(version: version, changes: ["体验与稳定性持续改进"])
+    }
+
     private var ocrStatisticsSummary: String {
         let attempts = ocrStatistics.reduce(0) { $0 + $1.attempts }
         let parsed = ocrStatistics.reduce(0) { $0 + $1.parsedSuccesses }
         guard attempts > 0 else { return "暂无调用记录" }
         return "调用 \(attempts) 次 · 解析成功 \(parsed) 次"
-    }
-
-    private var ocrConfigurationSummary: String {
-        let configured = ocrConfigurations.filter(\.isConfigured).map(\.provider.rawValue)
-        guard !configured.isEmpty else { return "仅本机兜底" }
-        return configured.joined(separator: " / ")
     }
 
     private var paymentAutomationInfo: some View {
@@ -187,6 +183,51 @@ struct ProfileSettingsView: View {
         }
     }
 
+}
+
+struct AppReleaseNote: Identifiable {
+    let version: String
+    let changes: [String]
+
+    var id: String { version }
+}
+
+enum AppReleaseNotes {
+    static let releases = [
+        AppReleaseNote(
+            version: "1.0.1",
+            changes: [
+                "总览聚焦本月状态、预算和最近记录",
+                "待复核账单前置，导入结果更容易找到",
+                "明细支持搜索商户、分类和备注",
+                "截图导入继续保留商户标识并增强识别"
+            ]
+        ),
+        AppReleaseNote(
+            version: "1.0",
+            changes: [
+                "支持截图、文本和手动记账",
+                "新增导入复核、重复识别和周期报告",
+                "账本数据默认保存在本机"
+            ]
+        )
+    ]
+}
+
+private struct VersionHistoryView: View {
+    let releases: [AppReleaseNote]
+
+    var body: some View {
+        List(releases) { release in
+            Section(release.version) {
+                ForEach(release.changes, id: \.self) { change in
+                    Label(change, systemImage: "checkmark.circle")
+                }
+            }
+        }
+        .navigationTitle("版本变化")
+        .navigationBarTitleDisplayMode(.inline)
+    }
 }
 
 struct ExpenseRecordPushSettingsView: View {
@@ -309,65 +350,6 @@ struct SettingsInfoRow: View {
             }
         }
         .padding(.vertical, 4)
-    }
-}
-
-private struct OCRProviderConfigurationRow: View {
-    let snapshot: OCRProviderConfigurationSnapshot
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: snapshot.isConfigured ? "checkmark.circle.fill" : "exclamationmark.circle")
-                .foregroundStyle(snapshot.isConfigured ? Color.green : Color.orange)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(snapshot.provider.rawValue)
-                    .font(.caption.weight(.semibold))
-                Text(snapshot.detail)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding(10)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-private struct OCRRecognitionStatisticRow: View {
-    let snapshot: OCRRecognitionProviderSnapshot
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(snapshot.provider.rawValue)
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text("调用 \(snapshot.attempts)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-
-            HStack(spacing: 10) {
-                statisticPill(title: "识别", value: snapshot.recognitionSuccesses)
-                statisticPill(title: "解析", value: snapshot.parsedSuccesses)
-                statisticPill(title: "失败", value: snapshot.failures)
-            }
-        }
-        .padding(10)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-    }
-
-    private func statisticPill(title: String, value: Int) -> some View {
-        HStack(spacing: 4) {
-            Text(title)
-            Text("\(value)")
-                .monospacedDigit()
-        }
-        .font(.caption2.weight(.semibold))
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(Color.secondary.opacity(0.08), in: Capsule())
     }
 }
 

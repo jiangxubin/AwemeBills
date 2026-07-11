@@ -58,6 +58,9 @@ enum PaymentTextParser {
         if !structuredPayments.isEmpty {
             return structuredPayments
         }
+        if PaymentStructuredPayloadParser.containsStructuredPayload(in: text) {
+            return []
+        }
 
         let listPayments = parseBillList(
             text,
@@ -643,6 +646,14 @@ enum PaymentTextParser {
 }
 
 private enum PaymentStructuredPayloadParser {
+    static func containsStructuredPayload(in text: String) -> Bool {
+        guard let json = extractJSON(from: text) else { return false }
+        let normalized = json.replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
+        return normalized.contains(#""payments":"#)
+            || normalized.contains(#""transactions":"#)
+            || normalized.contains(#""records":"#)
+    }
+
     static func parse(
         text: String,
         preferredChannel: PaymentChannel?,
@@ -661,15 +672,21 @@ private enum PaymentStructuredPayloadParser {
                 return nil
             }
 
-            let merchant = normalizedMerchant(item.merchant ?? item.title ?? item.payee ?? item.counterparty)
-            guard !merchant.isEmpty else { return nil }
-
             let channel = channel(
                 from: [item.channel, payload.source, payload.platform].compactMap { $0 }.joined(separator: " "),
                 preferredChannel: preferredChannel
             )
-            let category = category(from: item.category, merchant: merchant, note: item.note)
-            let occurredAt = occurredAt(from: item, referenceDate: referenceDate)
+            if let rawPayment = paymentFromRawBillRow(
+                item: item,
+                channel: channel,
+                referenceDate: referenceDate
+            ) {
+                return rawPayment
+            }
+
+            let merchant = normalizedMerchant(item.merchant ?? item.title ?? item.payee ?? item.counterparty)
+            guard !merchant.isEmpty else { return nil }
+            guard !isGenericStructuredMerchant(merchant, channel: channel) else { return nil }
             let note = [
                 item.note,
                 item.direction,
@@ -679,6 +696,12 @@ private enum PaymentStructuredPayloadParser {
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: "\n")
+            guard !shouldRejectStructuredTransaction(item: item, merchant: merchant, note: note) else {
+                return nil
+            }
+
+            let category = category(from: item.category, merchant: merchant, note: item.note)
+            let occurredAt = occurredAt(from: item, referenceDate: referenceDate)
 
             return ParsedPayment(
                 amount: amount,
@@ -690,6 +713,265 @@ private enum PaymentStructuredPayloadParser {
                 categoryRaw: item.category
             )
         }
+    }
+
+    private struct RawBillRowEvidence {
+        let merchant: String
+        let amount: Decimal
+        let timeText: String?
+        let categoryText: String?
+        let noteText: String
+    }
+
+    private static func paymentFromRawBillRow(
+        item: StructuredPaymentItem,
+        channel: PaymentChannel,
+        referenceDate: Date
+    ) -> ParsedPayment? {
+        let rawContext = [item.rawText, item.note]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        guard let evidence = rawBillRowEvidence(from: rawContext, channel: channel) else {
+            return nil
+        }
+
+        let rawCategory = evidence.categoryText ?? item.category
+        guard !shouldRejectStructuredTransaction(
+            item: item,
+            merchant: evidence.merchant,
+            note: evidence.noteText
+        ) else {
+            return nil
+        }
+
+        let category = category(from: rawCategory, merchant: evidence.merchant, note: evidence.noteText)
+        let structuredOccurredAt = occurredAt(from: item, referenceDate: referenceDate)
+        let rawOccurredAt = evidence.timeText.flatMap { PaymentTextParser.billDate(from: $0, now: referenceDate) }
+        return ParsedPayment(
+            amount: evidence.amount,
+            merchant: evidence.merchant,
+            channel: channel,
+            note: evidence.noteText,
+            occurredAt: shouldPreferStructuredDate(for: evidence.timeText)
+                ? (structuredOccurredAt ?? rawOccurredAt)
+                : (rawOccurredAt ?? structuredOccurredAt),
+            category: category,
+            categoryRaw: rawCategory
+        )
+    }
+
+    private static func rawBillRowEvidence(from text: String, channel: PaymentChannel) -> RawBillRowEvidence? {
+        let lines = text
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard lines.count >= 2 else { return nil }
+
+        let amountCandidates = lines.indices.compactMap { index -> (index: Int, amount: Decimal)? in
+            guard let amount = signedAmount(from: lines[index]) else { return nil }
+            return (index, amount)
+        }
+        guard let amountCandidate = amountCandidates.first else { return nil }
+
+        let timeIndex = nearestTimeLineIndex(in: lines, around: amountCandidate.index)
+        guard let merchant = merchantForRawBillRow(
+            in: lines,
+            amountIndex: amountCandidate.index,
+            timeIndex: timeIndex,
+            channel: channel
+        ) else {
+            return nil
+        }
+
+        let categoryText = categoryForRawBillRow(
+            in: lines,
+            merchant: merchant,
+            amountIndex: amountCandidate.index,
+            timeIndex: timeIndex
+        )
+        return RawBillRowEvidence(
+            merchant: merchant,
+            amount: amountCandidate.amount,
+            timeText: timeIndex.map { lines[$0] },
+            categoryText: categoryText,
+            noteText: lines.joined(separator: "\n")
+        )
+    }
+
+    private static func signedAmount(from line: String) -> Decimal? {
+        let pattern = #"^[+＋\-−]\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+              let range = Range(match.range(at: 1), in: line),
+              let amount = Decimal(string: String(line[range]).replacingOccurrences(of: ",", with: ""))
+        else { return nil }
+        return amount
+    }
+
+    private static func nearestTimeLineIndex(in lines: [String], around amountIndex: Int) -> Int? {
+        lines.indices
+            .filter { isRawBillTimeLine(lines[$0]) }
+            .min { abs($0 - amountIndex) < abs($1 - amountIndex) }
+    }
+
+    private static func merchantForRawBillRow(
+        in lines: [String],
+        amountIndex: Int,
+        timeIndex: Int?,
+        channel: PaymentChannel
+    ) -> String? {
+        let anchor = min(amountIndex, timeIndex ?? amountIndex)
+        if anchor > 0 {
+            for index in stride(from: anchor - 1, through: 0, by: -1) {
+                let candidate = normalizedRawBillMerchant(lines[index])
+                if isRawBillMerchantCandidate(candidate, channel: channel) {
+                    return candidate
+                }
+            }
+        }
+
+        for index in lines.indices where index != amountIndex && index != timeIndex {
+            let candidate = normalizedRawBillMerchant(lines[index])
+            if isRawBillMerchantCandidate(candidate, channel: channel) {
+                return candidate
+            }
+        }
+        return nil
+    }
+
+    private static func categoryForRawBillRow(
+        in lines: [String],
+        merchant: String,
+        amountIndex: Int,
+        timeIndex: Int?
+    ) -> String? {
+        lines.indices
+            .filter { $0 != amountIndex && $0 != timeIndex && normalizedRawBillMerchant(lines[$0]) != merchant }
+            .map { lines[$0].trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { PaymentPlatformCategoryMapper.category(from: $0) != nil }
+    }
+
+    private static func isRawBillTimeLine(_ line: String) -> Bool {
+        line.range(of: #"(?:今天|昨天|[0-9]{1,2}月[0-9]{1,2}日|[0-9]{1,2}-[0-9]{1,2})\s*[0-9]{1,2}:[0-9]{2}"#, options: .regularExpression) != nil
+    }
+
+    private static func shouldPreferStructuredDate(for rawTimeText: String?) -> Bool {
+        let rawTimeText = rawTimeText ?? ""
+        return rawTimeText.contains("今天") || rawTimeText.contains("昨天")
+    }
+
+    private static func normalizedRawBillMerchant(_ value: String) -> String {
+        normalizedMerchant(value)
+            .replacingOccurrences(of: #"[-−]\s*⋯$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\s*\.\.\.$"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func isRawBillMerchantCandidate(_ line: String, channel: PaymentChannel) -> Bool {
+        guard line.count >= 2 else { return false }
+        if isGenericStructuredMerchant(line, channel: channel) { return false }
+        if isRawBillTimeLine(line) { return false }
+        if signedAmount(from: line) != nil { return false }
+        if PaymentPlatformCategoryMapper.category(from: line) != nil { return false }
+        let ignoredFragments = ["支出", "收入", "全部账单", "查找交易", "收支统计", "截图解析", "待复核", "置信度"]
+        return !ignoredFragments.contains { line.contains($0) }
+    }
+
+    private static func isGenericStructuredMerchant(_ merchant: String, channel: PaymentChannel) -> Bool {
+        let normalized = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        let genericValues: Set<String> = [
+            channel.rawValue,
+            "微信支付",
+            "支付宝",
+            "云闪付",
+            "银联",
+            "账单"
+        ]
+        return genericValues.contains(normalized)
+    }
+
+    private static func shouldRejectStructuredTransaction(
+        item: StructuredPaymentItem,
+        merchant: String,
+        note: String
+    ) -> Bool {
+        let rawContext = ([
+            merchant,
+            item.amountText,
+            item.category,
+            item.occurredAt,
+            item.transactionTime,
+            item.date,
+            item.time,
+            item.direction,
+            item.type,
+            item.note,
+            item.rawText,
+            note
+        ] as [String?])
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n")
+
+        return isTerminalNonPaymentContext(rawContext)
+            || isAlipaySummaryContext(rawContext, merchant: merchant)
+    }
+
+    private static func isTerminalNonPaymentContext(_ text: String) -> Bool {
+        let terminalFragments = [
+            "交易关闭",
+            "订单关闭",
+            "已关闭",
+            "待付款",
+            "等待付款",
+            "未支付",
+            "已取消",
+            "交易取消",
+            "支付失败"
+        ]
+        return terminalFragments.contains { text.contains($0) }
+    }
+
+    private static func isAlipaySummaryContext(_ text: String, merchant: String) -> Bool {
+        let normalizedMerchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        let exactSummaryMerchants: Set<String> = [
+            "支出",
+            "收入",
+            "总支出",
+            "总收入",
+            "本月支出",
+            "本月收入",
+            "月支出",
+            "月收入",
+            "合计",
+            "总计",
+            "收支分析",
+            "收支统计"
+        ]
+        let merchantLooksLikeSummary = exactSummaryMerchants.contains(normalizedMerchant)
+            || normalizedMerchant.contains("汇总")
+            || normalizedMerchant.contains("合计")
+            || normalizedMerchant.contains("总计")
+            || normalizedMerchant.range(of: #"^[0-9]{1,2}\s*月(?:\s*(?:支出|收入))?$"#, options: .regularExpression) != nil
+
+        if merchantLooksLikeSummary {
+            return true
+        }
+
+        let compactText = text.replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
+        if normalizedMerchant.contains("支出") || normalizedMerchant.contains("收入") || normalizedMerchant.contains("月") {
+            if compactText.range(of: #"[0-9]{1,2}月支出[¥￥]?[0-9,]+(?:\.[0-9]{1,2})?"#, options: .regularExpression) != nil {
+                return true
+            }
+            if compactText.contains("支出¥") && compactText.contains("收入¥") {
+                return true
+            }
+        }
+        if compactText.contains("本月已省") || compactText.contains("今年累计已省") {
+            return true
+        }
+        return false
     }
 
     private static func extractJSON(from text: String) -> String? {
@@ -864,6 +1146,7 @@ private enum PaymentPlatformCategoryMapper {
             "投资理财": .transfer,
             "转账": .transfer,
             "退款": .transfer,
+            "宠物": .other,
             "商业服务": .other
         ]
 
@@ -880,7 +1163,8 @@ private enum PaymentPlatformCategoryMapper {
             ("文化", .entertainment), ("休闲", .entertainment), ("娱乐", .entertainment),
             ("酒店", .travel), ("住宿", .travel), ("旅行", .travel),
             ("教育", .education), ("培训", .education),
-            ("投资", .transfer), ("理财", .transfer), ("收益", .transfer), ("退款", .transfer)
+            ("投资", .transfer), ("理财", .transfer), ("收益", .transfer), ("退款", .transfer),
+            ("宠物", .other)
         ]
 
         if let match = fuzzyMatches.first(where: { normalized.contains($0.0) }) {

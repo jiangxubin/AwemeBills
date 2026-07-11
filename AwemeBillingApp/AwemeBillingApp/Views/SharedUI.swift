@@ -7,15 +7,11 @@ enum AppTheme {
     static let elevatedCard = Color(.tertiarySystemGroupedBackground)
     static let ink = Color.primary
     static let accent = Color(red: 0.02, green: 0.38, blue: 0.78)
-    static let teal = Color(red: 0.04, green: 0.62, blue: 0.54)
-    static let amber = Color(red: 0.88, green: 0.50, blue: 0.12)
-    static let accentGradient = LinearGradient(
-        colors: [accent, teal],
-        startPoint: .leading,
-        endPoint: .trailing
-    )
+    static let success = Color(red: 0.04, green: 0.56, blue: 0.34)
+    static let warning = Color(red: 0.86, green: 0.48, blue: 0.08)
+    static let teal = success
+    static let amber = warning
     static let cardStroke = Color.primary.opacity(0.08)
-    static let softShadow = Color.black.opacity(0.07)
 }
 
 struct AppCard<Content: View>: View {
@@ -30,7 +26,6 @@ struct AppCard<Content: View>: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(AppTheme.cardStroke, lineWidth: 1)
             }
-            .shadow(color: AppTheme.softShadow, radius: 16, x: 0, y: 8)
     }
 }
 
@@ -51,28 +46,6 @@ struct SectionHeader: View {
             }
         }
         .padding(.horizontal, 2)
-    }
-}
-
-struct StatPill: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.headline.monospacedDigit())
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(AppTheme.elevatedCard, in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(AppTheme.cardStroke, lineWidth: 1)
-        }
     }
 }
 
@@ -123,7 +96,7 @@ struct AmountBarRow: View {
                     .fill(AppTheme.accent.opacity(0.12))
                     .overlay(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(AppTheme.accentGradient)
+                            .fill(AppTheme.accent)
                             .frame(width: proxy.size.width * ratio)
                     }
             }
@@ -154,7 +127,7 @@ struct BudgetProgressBar: View {
                 .fill(Color.secondary.opacity(0.10))
                 .overlay(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(tint.gradient)
+                        .fill(tint)
                         .frame(width: max(proxy.size.width * ratio, ratio > 0 ? 8 : 0))
                 }
         }
@@ -235,7 +208,7 @@ struct MerchantLogoBadge: View {
             } else {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(style.background.gradient)
+                        .fill(style.background)
 
                     if let systemImage = style.systemImage {
                         Image(systemName: systemImage)

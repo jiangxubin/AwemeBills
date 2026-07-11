@@ -7,7 +7,9 @@
 - 主 App：`AwemeBillingApp/AwemeBillingApp`
 - 分享扩展：`AwemeBillingApp/AwemeBillingShareExtension`
 - 单元测试：`AwemeBillingApp/AwemeBillingTests`
-- 产品与技术文档：`docs/`
+- 产品需求与版本规划：`PRODUCT.md`
+- 交互、技术架构与测试方案：`DESIGN.md`
+- 工程治理补充：`docs/ios-engineering-governance.md`
 - Landing page：`landing/`
 - 快捷指令文件：`Shortcuts/`
 
@@ -15,16 +17,22 @@
 
 ## 本地验证
 
-推荐先跑项目质量门禁：
+推荐在 Apple Silicon Mac 上运行原生 arm64 质量门禁：
 
 ```sh
 scripts/quality_gate.sh
 ```
 
+指定可用模拟器后会继续执行单元测试和 UI 测试：
+
+```sh
+SIMULATOR_ID=739F8670-9175-417E-B501-0FB91A83F034 scripts/quality_gate.sh
+```
+
 常用 Xcode 命令：
 
 ```sh
-xcodebuild -project AwemeBillingApp/AwemeBillingApp.xcodeproj -scheme AwemeBillingApp -destination 'generic/platform=iOS Simulator' build-for-testing
+xcodebuild -project AwemeBillingApp/AwemeBillingApp.xcodeproj -scheme AwemeBillingApp -destination 'generic/platform=iOS Simulator' ARCHS=arm64 ONLY_ACTIVE_ARCH=YES build-for-testing
 xcodebuild -project AwemeBillingApp/AwemeBillingApp.xcodeproj -scheme AwemeBillingApp -configuration Debug -destination 'generic/platform=iOS' -derivedDataPath DerivedData-device-install -xcconfig LocalSecrets.xcconfig -allowProvisioningUpdates build
 ```
 
